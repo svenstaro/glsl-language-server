@@ -1,6 +1,6 @@
 .PHONY: build
 build:
-	mkdir -p build && cd build && cmake .. && make $(shell ncpus)
+	mkdir -p build && cd build && cmake .. && make -j$(shell nproc)
 
 .PHONY: run
 run: build

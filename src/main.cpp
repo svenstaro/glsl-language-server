@@ -120,16 +120,10 @@ int main(int argc, char* argv[])
         }
         mg_mgr_free(&mgr);
     } else {
-        while (true) {
-            std::istreambuf_iterator<char> begin(std::cin), end;
-            std::string tempString(begin, end);
-            if (!tempString.empty()) {
-                char* fileText = strdup(tempString.c_str());
-                std::cout << fileText << std::endl;
-
-                if (!logfile.empty()) {
-                    logfile_stream << fileText << "\n";
-                }
+        std::string lols;
+        while (!(std::cin >> lols).eof()) {
+            if (!logfile.empty()) {
+                logfile_stream << lols << std::endl;
             }
         }
     }
