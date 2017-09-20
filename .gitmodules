@@ -1,0 +1,12 @@
+[submodule "externals/glslang"]
+	path = externals/glslang
+	url = https://github.com/KhronosGroup/glslang.git
+[submodule "externals/json"]
+	path = externals/json
+	url = https://github.com/nlohmann/json.git
+[submodule "externals/mongoose"]
+	path = externals/mongoose
+	url = https://github.com/cesanta/mongoose.git
+[submodule "externals/CLI11"]
+	path = externals/CLI11
+	url = https://github.com/CLIUtils/CLI11.git
