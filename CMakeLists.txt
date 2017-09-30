@@ -9,6 +9,11 @@ include_directories(
     externals/glslang/StandAlone
 )
 
+add_subdirectory(externals/fmt)
+include_directories(
+    externals/fmt
+)
+
 add_subdirectory(externals/json)
 include_directories(
     externals/json/src
@@ -39,4 +44,5 @@ target_link_libraries(glslls
     nlohmann_json
     mongoose
     stdc++fs
+    fmt::fmt-header-only
 )

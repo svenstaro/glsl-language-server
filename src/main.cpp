@@ -1,5 +1,7 @@
 #include "CLI/CLI.hpp"
 
+#include "fmt/format.h"
+
 #include "json.hpp"
 
 #include "mongoose.h"
@@ -10,8 +12,9 @@
 #include <cstdint>
 #include <experimental/filesystem>
 #include <fstream>
-#include <iostream>
 #include <string>
+
+#include "messagebuffer.hpp"
 
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
@@ -19,13 +22,72 @@ namespace fs = std::experimental::filesystem;
 const char* s_http_port = "8000";
 struct mg_serve_http_opts s_http_server_opts;
 
-std::string make_response(std::string& content)
+struct Workspace {
+    bool m_initialized = false;
+};
+
+std::string make_response(const json& result, const json& error)
 {
+    json content{
+        { "jsonrpc", "2.0" },
+        { "id", "" },
+    };
+    if (!result.empty()) {
+        content["result"] = "";
+    } else if (!error.empty()) {
+        content["error"] = error;
+    }
+
     std::string header;
-    header.append("Content-Length: " + std::to_string(content.length()) + "\r\n");
+    header.append("Content-Length: " + std::to_string(content.size()) + "\r\n");
     header.append("Content-Type: application/vscode-jsonrpc;charset=utf-8\r\n");
     header.append("\r\n");
-    return header + content;
+    return header + content.dump();
+}
+
+std::string handle_message(const MessageBuffer& message_buffer, Workspace& workspace,
+    const std::string& logfile, std::ofstream& logfile_stream,
+    bool verbose = false)
+{
+    json body = message_buffer.body();
+    if (verbose) {
+        fmt::print("Received message of type '{}'\n", body["method"].get<std::string>());
+        fmt::print("Headers:\n");
+        for (auto elem : message_buffer.headers()) {
+            fmt::print("    {}: {}\n", elem.first, elem.second);
+        }
+        fmt::print("Body: \n{}\n", body.dump(4));
+    }
+    if (!logfile.empty()) {
+        logfile_stream << message_buffer.body() << std::endl;
+    }
+
+    // If the workspace has not yet been initialized but the client sends a
+    // message that doesn't have method "initialize" then we'll return an error
+    // as per LSP spec.
+    if (body["method"] != "initialize" && workspace.m_initialized) {
+        json error{
+            { "code", -32002 },
+            { "message", "Server not yet initialized." },
+        };
+        return make_response({}, error);
+    }
+
+    // If we don't know the method requested, we end up here.
+    if (body.count("method") == 1) {
+        json error{
+            { "code", -32601 },
+            { "message", fmt::format("Method '{}' not supported.", body["method"].get<std::string>()) },
+        };
+        return make_response({}, error);
+    }
+
+    // If we couldn't parse anything we end up here.
+    json error{
+        { "code", -32700 },
+        { "message", "Couldn't parse message." },
+    };
+    return make_response({}, error);
 }
 
 void ev_handler(struct mg_connection* c, int ev, void* p)
@@ -34,7 +96,7 @@ void ev_handler(struct mg_connection* c, int ev, void* p)
         struct http_message* hm = (struct http_message*)p;
 
         std::string content = hm->message.p;
-        std::string response = make_response(content);
+        std::string response = make_response({}, {});
         mg_send_head(c, 200, response.length(), "Content-Type: text/plain");
         mg_printf(c, "%.*s", static_cast<int>(response.length()), response.c_str());
     }
@@ -81,6 +143,8 @@ int main(int argc, char* argv[])
         logfile_stream.open(logfile);
     }
 
+    Workspace workspace;
+
     if (!use_stdin) {
         struct mg_mgr mgr;
         struct mg_connection* nc;
@@ -101,7 +165,7 @@ int main(int argc, char* argv[])
         shader.parse(&Resources, 110, false, messages);
         // std::cout << shader.getInfoLog() << std::endl;
         std::string debug_log = shader.getInfoLog();
-        std::cout << debug_log << std::endl;
+        fmt::print(debug_log);
         glslang::FinalizeProcess();
 
         mg_mgr_init(&mgr, NULL);
@@ -120,10 +184,14 @@ int main(int argc, char* argv[])
         }
         mg_mgr_free(&mgr);
     } else {
-        std::string lols;
-        while (!(std::cin >> lols).eof()) {
-            if (!logfile.empty()) {
-                logfile_stream << lols << std::endl;
+        char c;
+        MessageBuffer message_buffer;
+        while (std::cin.get(c)) {
+            message_buffer.handle_char(c);
+
+            if (message_buffer.message_completed()) {
+                auto message = handle_message(message_buffer, workspace, logfile, logfile_stream, verbose);
+                fmt::print("{}", message);
             }
         }
     }

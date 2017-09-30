@@ -10,3 +10,6 @@
 [submodule "externals/CLI11"]
 	path = externals/CLI11
 	url = https://github.com/CLIUtils/CLI11.git
+[submodule "externals/fmt"]
+	path = externals/fmt
+	url = https://github.com/fmtlib/fmt.git
