@@ -1,6 +1,7 @@
 #include "CLI/CLI.hpp"
 
 #include "fmt/format.h"
+#include "fmt/ostream.h"
 
 #include "json.hpp"
 
@@ -11,6 +12,7 @@
 
 #include <cstdint>
 #include <experimental/filesystem>
+#include <experimental/random>
 #include <fstream>
 #include <string>
 
@@ -30,16 +32,16 @@ std::string make_response(const json& result, const json& error)
 {
     json content{
         { "jsonrpc", "2.0" },
-        { "id", "" },
+        { "id", std::experimental::randint(0, 1000000000) },
     };
     if (!result.empty()) {
-        content["result"] = "";
+        content["result"] = result;
     } else if (!error.empty()) {
         content["error"] = error;
     }
 
     std::string header;
-    header.append("Content-Length: " + std::to_string(content.size()) + "\r\n");
+    header.append("Content-Length: " + std::to_string(content.dump().size()) + "\r\n");
     header.append("Content-Type: application/vscode-jsonrpc;charset=utf-8\r\n");
     header.append("\r\n");
     return header + content.dump();
@@ -51,15 +53,77 @@ std::string handle_message(const MessageBuffer& message_buffer, Workspace& works
 {
     json body = message_buffer.body();
     if (verbose) {
-        fmt::print("Received message of type '{}'\n", body["method"].get<std::string>());
-        fmt::print("Headers:\n");
+        // fmt::print(logfile_stream, "Received message of type '{}'\n", body["method"].get<std::string>());
+        // fmt::print(logfile_stream, "Headers:\n");
         for (auto elem : message_buffer.headers()) {
-            fmt::print("    {}: {}\n", elem.first, elem.second);
+            auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
+            fmt::print(logfile_stream, "    {}\n", pretty_header);
+            if (!logfile.empty()) {
+                logfile_stream << pretty_header << std::endl;
+            }
         }
-        fmt::print("Body: \n{}\n", body.dump(4));
+        fmt::print(logfile_stream, "Body: \n{}\n", body.dump(4));
     }
     if (!logfile.empty()) {
         logfile_stream << message_buffer.body() << std::endl;
+    }
+
+    // Parse initialize method.
+    if (body["method"] == "initialize") {
+        workspace.m_initialized = true;
+
+        json text_document_sync{
+            { "openClose", true },
+            { "change", 1 }, // Full sync
+            { "willSave", false },
+            { "willSaveWaitUntil", false },
+            { "save", { { "includeText", false } } },
+        };
+
+        json completion_provider{
+            { "resolveProvider", false },
+            { "triggerCharacters", {} },
+        };
+        json signature_help_provider{
+            {"triggerCharacters", ""}
+        };
+        json code_lens_provider{
+            {"resolveProvider", false}
+        };
+        json document_on_type_formatting_provider{
+            { "firstTriggerCharacter", "" },
+            { "moreTriggerCharacter", "" },
+        };
+        json document_link_provider{
+            {"resolveProvider", false}
+        };
+        json execute_command_provider{
+            {"commands", {}}
+        };
+        json result{
+            { "capabilities",
+                {}
+                    // { "textDocumentSync", text_document_sync },
+                    // { "hoverProvider", false },
+                    // { "completionProvider", completion_provider },
+                    // { "signatureHelpProvider", signature_help_provider },
+                    // { "definitionProvider", false },
+                    // { "referencesProvider", false },
+                    // { "documentHighlightProvider", false },
+                    // { "documentSymbolProvider", false },
+                    // { "workspaceSymbolProvider", false },
+                    // { "codeActionProvider", false },
+                    // { "codeLensProvider", code_lens_provider },
+                    // { "documentFormattingProvider", false },
+                    // { "documentRangeFormattingProvider", false },
+                    // { "documentOnTypeFormattingProvider", document_on_type_formatting_provider },
+                    // { "renameProvider", false },
+                    // { "documentLinkProvider", document_link_provider },
+                    // { "executeCommandProvider", execute_command_provider },
+                    // { "experimental", {} }, }
+            }
+        };
+        return make_response(result, {});
     }
 
     // If the workspace has not yet been initialized but the client sends a
@@ -165,14 +229,14 @@ int main(int argc, char* argv[])
         shader.parse(&Resources, 110, false, messages);
         // std::cout << shader.getInfoLog() << std::endl;
         std::string debug_log = shader.getInfoLog();
-        fmt::print(debug_log);
+        // fmt::print(debug_log);
         glslang::FinalizeProcess();
 
         mg_mgr_init(&mgr, NULL);
-        printf("Starting web server on port %s\n", s_http_port);
+        // printf("Starting web server on port %s\n", s_http_port);
         nc = mg_bind(&mgr, s_http_port, ev_handler);
         if (nc == NULL) {
-            printf("Failed to create listener\n");
+            // printf("Failed to create listener\n");
             return 1;
         }
 
@@ -192,6 +256,11 @@ int main(int argc, char* argv[])
             if (message_buffer.message_completed()) {
                 auto message = handle_message(message_buffer, workspace, logfile, logfile_stream, verbose);
                 fmt::print("{}", message);
+                std::cout << std::flush;
+
+                if (!logfile.empty()) {
+                    fmt::print(logfile_stream, "{}\n", message);
+                }
             }
         }
     }
