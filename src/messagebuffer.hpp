@@ -15,6 +15,7 @@ public:
     void handle_char(char c);
     const std::map<std::string, std::string>& headers() const;
     const json& body() const;
+    const std::string& raw() const;
     bool message_completed();
     void clear();
 

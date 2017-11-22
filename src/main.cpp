@@ -48,25 +48,9 @@ std::string make_response(const json& result, const json& error)
 }
 
 std::string handle_message(const MessageBuffer& message_buffer, Workspace& workspace,
-    const std::string& logfile, std::ofstream& logfile_stream,
-    bool verbose = false)
+        bool verbose = false)
 {
     json body = message_buffer.body();
-    if (verbose) {
-        // fmt::print(logfile_stream, "Received message of type '{}'\n", body["method"].get<std::string>());
-        // fmt::print(logfile_stream, "Headers:\n");
-        for (auto elem : message_buffer.headers()) {
-            auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
-            fmt::print(logfile_stream, "    {}\n", pretty_header);
-            if (!logfile.empty()) {
-                logfile_stream << pretty_header << std::endl;
-            }
-        }
-        fmt::print(logfile_stream, "Body: \n{}\n", body.dump(4));
-    }
-    if (!logfile.empty()) {
-        logfile_stream << message_buffer.body() << std::endl;
-    }
 
     // Parse initialize method.
     if (body["method"] == "initialize") {
@@ -137,7 +121,7 @@ std::string handle_message(const MessageBuffer& message_buffer, Workspace& works
         return make_response({}, error);
     }
 
-    // If we don't know the method requested, we end up here.
+    // If we don't know the method requested, we ehttps://hooks.slack.com/services/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nd up here.
     if (body.count("method") == 1) {
         json error{
             { "code", -32601 },
@@ -254,13 +238,29 @@ int main(int argc, char* argv[])
             message_buffer.handle_char(c);
 
             if (message_buffer.message_completed()) {
-                auto message = handle_message(message_buffer, workspace, logfile, logfile_stream, verbose);
+                json body = message_buffer.body();
+                if (verbose) {
+                    fmt::print(logfile_stream, ">>> Received message of type '{}'\n", body["method"].get<std::string>());
+                    fmt::print(logfile_stream, "Headers:\n");
+                    for (auto elem : message_buffer.headers()) {
+                        auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
+                        // fmt::print(logfile_stream, "    {}\n", pretty_header);
+                        if (!logfile.empty()) {
+                            logfile_stream << pretty_header << std::endl;
+                        }
+                    }
+                    fmt::print(logfile_stream, "Body: \n{}\n", body.dump(4));
+                    fmt::print(logfile_stream, "Raw: \n{}\n", message_buffer.raw());
+                }
+
+                auto message = handle_message(message_buffer, workspace);
                 fmt::print("{}", message);
                 std::cout << std::flush;
 
                 if (!logfile.empty()) {
-                    fmt::print(logfile_stream, "{}\n", message);
+                    fmt::print(logfile_stream, "<<< Sending message: \n{}\n", message);
                 }
+                message_buffer.clear();
             }
         }
     }

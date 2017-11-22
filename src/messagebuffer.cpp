@@ -46,6 +46,11 @@ const json& MessageBuffer::body() const
     return m_body;
 }
 
+const std::string& MessageBuffer::raw() const
+{
+    return m_raw_message;
+}
+
 bool MessageBuffer::message_completed()
 {
     if (m_is_header_done && !m_body.empty()) {
