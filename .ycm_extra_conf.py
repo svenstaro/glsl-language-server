@@ -51,7 +51,7 @@ flags = [
     '-Iexternals/CLI11/include',
     '-Iexternals/fmt',
     '-Wall',
-    '-std=c++14',
+    '-std=c++1z',
 ]
 
 

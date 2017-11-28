@@ -27,7 +27,7 @@ include_directories(
 include_directories(
     externals/CLI11/include)
 
-set(CMAKE_CXX_STANARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 file(GLOB SOURCES
     src/*.cpp
