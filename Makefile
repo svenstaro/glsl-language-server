@@ -6,6 +6,10 @@ build:
 run: build
 	build/glslls
 
+.PHONY: install
+install:
+	install -Dm755 build/glslls $(DESTDIR)/$(PREFIX)/bin/glslls
+
 .PHONY: clean
 clean:
 	rm -rf build
