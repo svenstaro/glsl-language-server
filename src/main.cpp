@@ -21,26 +21,13 @@
 
 #include "messagebuffer.hpp"
 #include "workspace.hpp"
+#include "utils.hpp"
 
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 const char* s_http_port = "8000";
 struct mg_serve_http_opts s_http_server_opts;
-
-std::vector<std::string> split_string(const std::string& string_to_split, const std::string& pattern)
-{
-    std::vector<std::string> result;
-
-    const std::regex re(pattern);
-    std::sregex_token_iterator iter(string_to_split.begin(), string_to_split.end(), re, -1);
-
-    for (std::sregex_token_iterator end; iter != end; ++iter) {
-        result.push_back(iter->str());
-    }
-
-    return result;
-}
 
 std::string make_response(const json& response)
 {
@@ -72,7 +59,8 @@ EShLanguage find_language(const std::string& name)
         return EShLangCompute;
 }
 
-json get_diagnostics(std::string uri, std::string content, std::ostream& logfile_stream)
+json get_diagnostics(std::string uri, std::string content,
+        bool use_logfile, std::ostream& logfile_stream)
 {
     glslang::InitializeProcess();
     auto document = uri;
@@ -81,13 +69,14 @@ json get_diagnostics(std::string uri, std::string content, std::ostream& logfile
     glslang::TShader shader(lang);
     shader.setStrings(&shader_cstring, 1);
     TBuiltInResource Resources = glslang::DefaultTBuiltInResource;
-    EShMessages messages = EShMsgDefault;
+    EShMessages messages = EShMsgCascadingErrors;
     shader.parse(&Resources, 110, false, messages);
-    // std::cout << shader.getInfoLog() << std::endl;
     std::string debug_log = shader.getInfoLog();
     glslang::FinalizeProcess();
 
-    logfile_stream << "Diagnostics raw output: \n" << debug_log << std::endl;
+    if (use_logfile) {
+        fmt::print(logfile_stream, "Diagnostics raw output: {}\n" , debug_log);
+    }
 
     std::regex re("(.*): 0:(\\d*): (.*)");
     std::smatch matches;
@@ -97,10 +86,6 @@ json get_diagnostics(std::string uri, std::string content, std::ostream& logfile
     json diagnostics;
     for (auto error_line : error_lines) {
         std::regex_search(error_line, matches, re);
-        // logfile_stream << "matching: " << line << std::endl;
-        // logfile_stream << "found " << matches.size() << " matches" << std::endl;
-        // logfile_stream << matches[1] << std::endl;
-        // logfile_stream << matches[2] << std::endl;
         if (matches.size() == 4) {
             json diagnostic;
             std::string severity = matches[1];
@@ -111,24 +96,46 @@ json get_diagnostics(std::string uri, std::string content, std::ostream& logfile
                 severity_no = 2;
             }
             if (severity_no == -1) {
-                fmt::print(logfile_stream, "Error: Unknown severity '{}'\n", severity);
+                if (use_logfile) {
+                    fmt::print(logfile_stream, "Error: Unknown severity '{}'\n", severity);
+                }
             }
+            std::string message = trim(matches[3], " ");
 
             // -1 because lines are 0-indexed as per LSP specification.
             int line_no = std::stoi(matches[2]) - 1;
+            std::string source_line = content_lines[line_no];
 
-            std::string message = matches[3];
+            int start_char = -1;
+            int end_char = -1;
+
+            // If this is an undeclared identifier, we can find the exact
+            // position of the broken identifier.
+            std::smatch message_matches;
+            std::regex re("'(.*)' : (.*)");
+            std::regex_search(message, message_matches, re);
+            if (message_matches.size() == 3) {
+                std::string identifier = message_matches[1];
+                int identifier_length = message_matches[1].length();
+                auto source_pos = source_line.find(identifier);
+                start_char = source_pos;
+                end_char = source_pos + identifier_length - 1;
+            } else {
+                // If we can't find a precise position, we'll just use the whole line.
+                start_char = 0;
+                end_char = source_line.length();
+            }
+
             json range{
                 {"start", {
                     { "line", line_no },
-                    { "character", 0 },
+                    { "character", start_char },
                 }},
                 { "end", {
                     { "line", line_no },
-                    { "character", content_lines[line_no - 1].length() },
+                    { "character", end_char },
                 }},
             };
-            logfile_stream.flush();
             diagnostic["range"] = range;
             diagnostic["severity"] = severity_no;
             diagnostic["source"] = "glslang";
@@ -136,12 +143,15 @@ json get_diagnostics(std::string uri, std::string content, std::ostream& logfile
             diagnostics.push_back(diagnostic);
         }
     }
-    logfile_stream << "Sending diagnostics" << diagnostics << std::endl;
+    if (use_logfile) {
+        fmt::print(logfile_stream, "Sending diagnostics: {}\n" , diagnostics);
+    }
+    logfile_stream.flush();
     return diagnostics;
 }
 
 std::optional<std::string> handle_message(const MessageBuffer& message_buffer, Workspace& workspace,
-    std::ofstream& logfile_stream, bool verbose = false)
+    bool use_logfile, std::ofstream& logfile_stream, bool verbose = false)
 {
     json body = message_buffer.body();
 
@@ -179,25 +189,25 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
         json result{
             {
                 "capabilities",
-                {}
-                // { "textDocumentSync", text_document_sync },
-                // { "hoverProvider", false },
-                // { "completionProvider", completion_provider },
-                // { "signatureHelpProvider", signature_help_provider },
-                // { "definitionProvider", false },
-                // { "referencesProvider", false },
-                // { "documentHighlightProvider", false },
-                // { "documentSymbolProvider", false },
-                // { "workspaceSymbolProvider", false },
-                // { "codeActionProvider", false },
-                // { "codeLensProvider", code_lens_provider },
-                // { "documentFormattingProvider", false },
-                // { "documentRangeFormattingProvider", false },
-                // { "documentOnTypeFormattingProvider", document_on_type_formatting_provider },
-                // { "renameProvider", false },
-                // { "documentLinkProvider", document_link_provider },
-                // { "executeCommandProvider", execute_command_provider },
-                // { "experimental", {} }, }
+                {
+                { "textDocumentSync", text_document_sync },
+                { "hoverProvider", false },
+                { "completionProvider", completion_provider },
+                { "signatureHelpProvider", signature_help_provider },
+                { "definitionProvider", false },
+                { "referencesProvider", false },
+                { "documentHighlightProvider", false },
+                { "documentSymbolProvider", false },
+                { "workspaceSymbolProvider", false },
+                { "codeActionProvider", false },
+                { "codeLensProvider", code_lens_provider },
+                { "documentFormattingProvider", false },
+                { "documentRangeFormattingProvider", false },
+                { "documentOnTypeFormattingProvider", document_on_type_formatting_provider },
+                { "renameProvider", false },
+                { "documentLinkProvider", document_link_provider },
+                { "executeCommandProvider", execute_command_provider },
+                { "experimental", {} }, }
             }
         };
 
@@ -210,7 +220,10 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
         auto text = body["params"]["textDocument"]["text"];
         workspace.add_document(uri, text);
 
-        json diagnostics = get_diagnostics(uri, text, logfile_stream);
+        json diagnostics = get_diagnostics(uri, text, use_logfile, logfile_stream);
+        if (diagnostics.empty()) {
+            diagnostics = json::array();
+        }
         json result_body{
             { "method", "textDocument/publishDiagnostics" },
             { "params", {
@@ -225,9 +238,10 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
         workspace.change_document(uri, change);
 
         std::string document = workspace.documents()[uri];
-        json diagnostics = get_diagnostics(uri, document, logfile_stream);
-        logfile_stream << diagnostics << std::endl;
-
+        json diagnostics = get_diagnostics(uri, document, use_logfile, logfile_stream);
+        if (diagnostics.empty()) {
+            diagnostics = json::array();
+        }
         json result_body{
             { "method", "textDocument/publishDiagnostics" },
             { "params", {
@@ -306,8 +320,9 @@ int main(int argc, char* argv[])
         return app.exit(e);
     }
 
+    bool use_logfile = !logfile.empty();
     std::ofstream logfile_stream;
-    if (!logfile.empty()) {
+    if (use_logfile) {
         logfile_stream.open(logfile);
     }
 
@@ -341,7 +356,7 @@ int main(int argc, char* argv[])
 
             if (message_buffer.message_completed()) {
                 json body = message_buffer.body();
-                if (!logfile.empty()) {
+                if (use_logfile) {
                     fmt::print(logfile_stream, ">>> Received message of type '{}'\n", body["method"].get<std::string>());
                     fmt::print(logfile_stream, "Headers:\n");
                     for (auto elem : message_buffer.headers()) {
@@ -352,12 +367,13 @@ int main(int argc, char* argv[])
                     fmt::print(logfile_stream, "Raw: \n{}\n\n", message_buffer.raw());
                 }
 
-                auto message = handle_message(message_buffer, workspace, logfile_stream);
+                auto message = handle_message(message_buffer, workspace,
+                        use_logfile, logfile_stream);
                 if (message.has_value()) {
                     fmt::print("{}", message.value());
                     std::cout << std::flush;
 
-                    if (!logfile.empty()) {
+                    if (use_logfile) {
                         fmt::print(logfile_stream, "<<< Sending message: \n{}\n\n", message.value());
                     }
                 }
@@ -367,7 +383,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (!logfile.empty()) {
+    if (use_logfile) {
         logfile_stream.close();
     }
 
