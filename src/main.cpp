@@ -60,7 +60,7 @@ EShLanguage find_language(const std::string& name)
 }
 
 json get_diagnostics(std::string uri, std::string content,
-        bool use_logfile, std::ostream& logfile_stream)
+        bool use_logfile, std::ostream& logfile_stream, bool verbose = false)
 {
     glslang::InitializeProcess();
     auto document = uri;
@@ -74,7 +74,7 @@ json get_diagnostics(std::string uri, std::string content,
     std::string debug_log = shader.getInfoLog();
     glslang::FinalizeProcess();
 
-    if (use_logfile) {
+    if (use_logfile && verbose) {
         fmt::print(logfile_stream, "Diagnostics raw output: {}\n" , debug_log);
     }
 
@@ -143,7 +143,7 @@ json get_diagnostics(std::string uri, std::string content,
             diagnostics.push_back(diagnostic);
         }
     }
-    if (use_logfile) {
+    if (use_logfile && verbose) {
         fmt::print(logfile_stream, "Sending diagnostics: {}\n" , diagnostics);
     }
     logfile_stream.flush();
@@ -220,7 +220,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
         auto text = body["params"]["textDocument"]["text"];
         workspace.add_document(uri, text);
 
-        json diagnostics = get_diagnostics(uri, text, use_logfile, logfile_stream);
+        json diagnostics = get_diagnostics(uri, text, use_logfile, logfile_stream, verbose);
         if (diagnostics.empty()) {
             diagnostics = json::array();
         }
@@ -238,7 +238,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
         workspace.change_document(uri, change);
 
         std::string document = workspace.documents()[uri];
-        json diagnostics = get_diagnostics(uri, document, use_logfile, logfile_stream);
+        json diagnostics = get_diagnostics(uri, document, use_logfile, logfile_stream, verbose);
         if (diagnostics.empty()) {
             diagnostics = json::array();
         }
@@ -358,22 +358,24 @@ int main(int argc, char* argv[])
                 json body = message_buffer.body();
                 if (use_logfile) {
                     fmt::print(logfile_stream, ">>> Received message of type '{}'\n", body["method"].get<std::string>());
-                    fmt::print(logfile_stream, "Headers:\n");
-                    for (auto elem : message_buffer.headers()) {
-                        auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
-                        logfile_stream << pretty_header;
+                    if (verbose) {
+                        fmt::print(logfile_stream, "Headers:\n");
+                        for (auto elem : message_buffer.headers()) {
+                            auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
+                            logfile_stream << pretty_header;
+                        }
+                        fmt::print(logfile_stream, "Body: \n{}\n\n", body.dump(4));
+                        fmt::print(logfile_stream, "Raw: \n{}\n\n", message_buffer.raw());
                     }
-                    fmt::print(logfile_stream, "Body: \n{}\n\n", body.dump(4));
-                    fmt::print(logfile_stream, "Raw: \n{}\n\n", message_buffer.raw());
                 }
 
                 auto message = handle_message(message_buffer, workspace,
-                        use_logfile, logfile_stream);
+                        use_logfile, logfile_stream, verbose);
                 if (message.has_value()) {
                     fmt::print("{}", message.value());
                     std::cout << std::flush;
 
-                    if (use_logfile) {
+                    if (use_logfile && verbose) {
                         fmt::print(logfile_stream, "<<< Sending message: \n{}\n\n", message.value());
                     }
                 }
