@@ -31,3 +31,8 @@ You can also use the `Makefile` in the project root which is provided for conven
 
     cd build
     make install
+
+## Usage
+
+You can run `glslls` to use a HTTP server to handle IO. Alternatively, run
+`glslls --stdin` to handle IO on stdin.
