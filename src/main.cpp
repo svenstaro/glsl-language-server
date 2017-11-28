@@ -26,8 +26,12 @@
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
-const char* s_http_port = "8000";
-struct mg_serve_http_opts s_http_server_opts;
+struct AppState {
+    Workspace workspace;
+    bool verbose;
+    bool use_logfile;
+    std::ofstream logfile_stream;
+};
 
 std::string make_response(const json& response)
 {
@@ -60,7 +64,7 @@ EShLanguage find_language(const std::string& name)
 }
 
 json get_diagnostics(std::string uri, std::string content,
-        bool use_logfile, std::ostream& logfile_stream, bool verbose = false)
+        AppState& appstate)
 {
     glslang::InitializeProcess();
     auto document = uri;
@@ -74,8 +78,8 @@ json get_diagnostics(std::string uri, std::string content,
     std::string debug_log = shader.getInfoLog();
     glslang::FinalizeProcess();
 
-    if (use_logfile && verbose) {
-        fmt::print(logfile_stream, "Diagnostics raw output: {}\n" , debug_log);
+    if (appstate.use_logfile && appstate.verbose) {
+        fmt::print(appstate.logfile_stream, "Diagnostics raw output: {}\n" , debug_log);
     }
 
     std::regex re("(.*): 0:(\\d*): (.*)");
@@ -96,8 +100,8 @@ json get_diagnostics(std::string uri, std::string content,
                 severity_no = 2;
             }
             if (severity_no == -1) {
-                if (use_logfile) {
-                    fmt::print(logfile_stream, "Error: Unknown severity '{}'\n", severity);
+                if (appstate.use_logfile) {
+                    fmt::print(appstate.logfile_stream, "Error: Unknown severity '{}'\n", severity);
                 }
             }
             std::string message = trim(matches[3], " ");
@@ -143,20 +147,19 @@ json get_diagnostics(std::string uri, std::string content,
             diagnostics.push_back(diagnostic);
         }
     }
-    if (use_logfile && verbose) {
-        fmt::print(logfile_stream, "Sending diagnostics: {}\n" , diagnostics);
+    if (appstate.use_logfile && appstate.verbose) {
+        fmt::print(appstate.logfile_stream, "Sending diagnostics: {}\n" , diagnostics);
     }
-    logfile_stream.flush();
+    appstate.logfile_stream.flush();
     return diagnostics;
 }
 
-std::optional<std::string> handle_message(const MessageBuffer& message_buffer, Workspace& workspace,
-    bool use_logfile, std::ofstream& logfile_stream, bool verbose = false)
+std::optional<std::string> handle_message(const MessageBuffer& message_buffer, AppState& appstate)
 {
     json body = message_buffer.body();
 
     if (body["method"] == "initialize") {
-        workspace.set_initialized(true);
+        appstate.workspace.set_initialized(true);
 
         json text_document_sync{
             { "openClose", true },
@@ -218,9 +221,9 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
     } else if (body["method"] == "textDocument/didOpen") {
         auto uri = body["params"]["textDocument"]["uri"];
         auto text = body["params"]["textDocument"]["text"];
-        workspace.add_document(uri, text);
+        appstate.workspace.add_document(uri, text);
 
-        json diagnostics = get_diagnostics(uri, text, use_logfile, logfile_stream, verbose);
+        json diagnostics = get_diagnostics(uri, text, appstate);
         if (diagnostics.empty()) {
             diagnostics = json::array();
         }
@@ -235,10 +238,10 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
     } else if (body["method"] == "textDocument/didChange") {
         auto uri = body["params"]["textDocument"]["uri"];
         auto change = body["params"]["contentChanges"][0]["text"];
-        workspace.change_document(uri, change);
+        appstate.workspace.change_document(uri, change);
 
-        std::string document = workspace.documents()[uri];
-        json diagnostics = get_diagnostics(uri, document, use_logfile, logfile_stream, verbose);
+        std::string document = appstate.workspace.documents()[uri];
+        json diagnostics = get_diagnostics(uri, document, appstate);
         if (diagnostics.empty()) {
             diagnostics = json::array();
         }
@@ -255,7 +258,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
     // If the workspace has not yet been initialized but the client sends a
     // message that doesn't have method "initialize" then we'll return an error
     // as per LSP spec.
-    if (body["method"] != "initialize" && !workspace.is_initialized()) {
+    if (body["method"] != "initialize" && !appstate.workspace.is_initialized()) {
         json error{
             { "code", -32002 },
             { "message", "Server not yet initialized." },
@@ -289,15 +292,44 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, W
     return make_response(result_body);
 }
 
-void ev_handler(struct mg_connection* c, int ev, void* p)
-{
+void ev_handler(struct mg_connection* c, int ev, void* p) {
+    AppState& appstate = *static_cast<AppState*>(c->mgr->user_data);
+
     if (ev == MG_EV_HTTP_REQUEST) {
         struct http_message* hm = (struct http_message*)p;
 
         std::string content = hm->message.p;
-        std::string response = make_response({});
-        mg_send_head(c, 200, response.length(), "Content-Type: text/plain");
-        mg_printf(c, "%.*s", static_cast<int>(response.length()), response.c_str());
+
+        MessageBuffer message_buffer;
+        message_buffer.handle_string(content);
+
+        if (message_buffer.message_completed()) {
+            json body = message_buffer.body();
+            if (appstate.use_logfile) {
+                fmt::print(appstate.logfile_stream, ">>> Received message of type '{}'\n", body["method"].get<std::string>());
+                if (appstate.verbose) {
+                    fmt::print(appstate.logfile_stream, "Headers:\n");
+                    for (auto elem : message_buffer.headers()) {
+                        auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
+                        appstate.logfile_stream << pretty_header;
+                    }
+                    fmt::print(appstate.logfile_stream, "Body: \n{}\n\n", body.dump(4));
+                    fmt::print(appstate.logfile_stream, "Raw: \n{}\n\n", message_buffer.raw());
+                }
+            }
+
+            auto message = handle_message(message_buffer, appstate);
+            if (message.has_value()) {
+                std::string response = message.value();
+                mg_send_head(c, 200, response.length(), "Content-Type: text/plain");
+                mg_printf(c, "%.*s", static_cast<int>(response.length()), response.c_str());
+                if (appstate.use_logfile && appstate.verbose) {
+                    fmt::print(appstate.logfile_stream, "<<< Sending message: \n{}\n\n", message.value());
+                }
+            }
+            appstate.logfile_stream.flush();
+            message_buffer.clear();
+        }
     }
 }
 
@@ -320,24 +352,24 @@ int main(int argc, char* argv[])
         return app.exit(e);
     }
 
-    bool use_logfile = !logfile.empty();
-    std::ofstream logfile_stream;
-    if (use_logfile) {
-        logfile_stream.open(logfile);
+    AppState appstate;
+    appstate.verbose = verbose;
+    appstate.use_logfile = !logfile.empty();
+    if (appstate.use_logfile) {
+        appstate.logfile_stream.open(logfile);
     }
 
-    Workspace workspace;
-
-    // TODO: HTTP Stuff probably doesn't work right now.
     if (!use_stdin) {
         struct mg_mgr mgr;
         struct mg_connection* nc;
+        struct mg_bind_opts bind_opts;
+        std::memset(&bind_opts, 0, sizeof(bind_opts));
+        bind_opts.user_data = &appstate;
 
         mg_mgr_init(&mgr, NULL);
-        // printf("Starting web server on port %s\n", s_http_port);
-        nc = mg_bind(&mgr, s_http_port, ev_handler);
+        fmt::print("Starting web server on port {}\n", port);
+        nc = mg_bind_opt(&mgr, std::to_string(port).c_str(), ev_handler, bind_opts);
         if (nc == NULL) {
-            // printf("Failed to create listener\n");
             return 1;
         }
 
@@ -356,37 +388,36 @@ int main(int argc, char* argv[])
 
             if (message_buffer.message_completed()) {
                 json body = message_buffer.body();
-                if (use_logfile) {
-                    fmt::print(logfile_stream, ">>> Received message of type '{}'\n", body["method"].get<std::string>());
-                    if (verbose) {
-                        fmt::print(logfile_stream, "Headers:\n");
+                if (appstate.use_logfile) {
+                    fmt::print(appstate.logfile_stream, ">>> Received message of type '{}'\n", body["method"].get<std::string>());
+                    if (appstate.verbose) {
+                        fmt::print(appstate.logfile_stream, "Headers:\n");
                         for (auto elem : message_buffer.headers()) {
                             auto pretty_header = fmt::format("{}: {}\n", elem.first, elem.second);
-                            logfile_stream << pretty_header;
+                            appstate.logfile_stream << pretty_header;
                         }
-                        fmt::print(logfile_stream, "Body: \n{}\n\n", body.dump(4));
-                        fmt::print(logfile_stream, "Raw: \n{}\n\n", message_buffer.raw());
+                        fmt::print(appstate.logfile_stream, "Body: \n{}\n\n", body.dump(4));
+                        fmt::print(appstate.logfile_stream, "Raw: \n{}\n\n", message_buffer.raw());
                     }
                 }
 
-                auto message = handle_message(message_buffer, workspace,
-                        use_logfile, logfile_stream, verbose);
+                auto message = handle_message(message_buffer, appstate);
                 if (message.has_value()) {
                     fmt::print("{}", message.value());
                     std::cout << std::flush;
 
-                    if (use_logfile && verbose) {
-                        fmt::print(logfile_stream, "<<< Sending message: \n{}\n\n", message.value());
+                    if (appstate.use_logfile && appstate.verbose) {
+                        fmt::print(appstate.logfile_stream, "<<< Sending message: \n{}\n\n", message.value());
                     }
                 }
-                logfile_stream.flush();
+                appstate.logfile_stream.flush();
                 message_buffer.clear();
             }
         }
     }
 
-    if (use_logfile) {
-        logfile_stream.close();
+    if (appstate.use_logfile) {
+        appstate.logfile_stream.close();
     }
 
     return 0;

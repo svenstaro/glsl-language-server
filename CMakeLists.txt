@@ -46,3 +46,6 @@ target_link_libraries(glslls
     stdc++fs
     fmt::fmt-header-only
 )
+
+install(TARGETS glslls
+        RUNTIME DESTINATION bin)

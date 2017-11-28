@@ -13,6 +13,7 @@ public:
     MessageBuffer();
     virtual ~MessageBuffer();
     void handle_char(char c);
+    void handle_string(std::string s);
     const std::map<std::string, std::string>& headers() const;
     const json& body() const;
     const std::string& raw() const;
