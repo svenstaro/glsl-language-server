@@ -14,6 +14,7 @@ include_directories(
     externals/fmt
 )
 
+set(JSON_BuildTests OFF)
 add_subdirectory(externals/json)
 include_directories(
     externals/json/src
