@@ -4,6 +4,19 @@ Language server implementation for GLSL
 ## Status
 Currently this LSP implementation can be interfaced with using either HTTP or stdio.
 
+### Current Features
+
+- Diagnostics
+
+### Planned Features
+
+- Completion
+- Hover
+- Jump to def
+- Workspace symbols
+- Find references
+
+
 ## Compile
 
     git submodule update --init
