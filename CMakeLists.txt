@@ -5,6 +5,7 @@ find_package(Threads REQUIRED)
 
 add_subdirectory(externals/glslang)
 include_directories(
+    externals/glslang/
     externals/glslang/glslang/Public
     externals/glslang/StandAlone
 )
