@@ -3,20 +3,19 @@ project(glsl-language-server)
 
 find_package(Threads REQUIRED)
 
-add_subdirectory(externals/glslang)
+add_subdirectory(externals/glslang EXCLUDE_FROM_ALL)
 include_directories(
     externals/glslang/
     externals/glslang/glslang/Public
     externals/glslang/StandAlone
 )
 
-add_subdirectory(externals/fmt)
+add_subdirectory(externals/fmt EXCLUDE_FROM_ALL)
 include_directories(
     externals/fmt
 )
 
-set(JSON_BuildTests OFF)
-add_subdirectory(externals/json)
+add_subdirectory(externals/json EXCLUDE_FROM_ALL)
 include_directories(
     externals/json/src
 )
