@@ -12,7 +12,6 @@
 
 #include <cstdint>
 #include <experimental/filesystem>
-#include <experimental/random>
 #include <fstream>
 #include <optional>
 #include <regex>
@@ -37,7 +36,6 @@ std::string make_response(const json& response)
 {
     json content = response;
     content["jsonrpc"] = "2.0";
-    content["id"] = std::experimental::randint(0, 1000000000);
 
     std::string header;
     header.append("Content-Length: " + std::to_string(content.dump(4).size()) + "\r\n");
@@ -215,6 +213,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
         };
 
         json result_body{
+            { "id", body["id"] },
             { "result", result }
         };
         return make_response(result_body);
