@@ -59,15 +59,18 @@ EShLanguage find_language(const std::string& name)
         return EShLangFragment;
     else if (ext == ".comp")
         return EShLangCompute;
+	throw std::invalid_argument("Unknown file extension!");
 }
 
 json get_diagnostics(std::string uri, std::string content,
         AppState& appstate)
 {
-    glslang::InitializeProcess();
+    FILE fp_old = *stdout;
+    *stdout = *fopen("/dev/null","w");
     auto document = uri;
     auto shader_cstring = content.c_str();
     auto lang = find_language(document);
+    glslang::InitializeProcess();
     glslang::TShader shader(lang);
     shader.setStrings(&shader_cstring, 1);
     TBuiltInResource Resources = glslang::DefaultTBuiltInResource;
@@ -75,6 +78,7 @@ json get_diagnostics(std::string uri, std::string content,
     shader.parse(&Resources, 110, false, messages);
     std::string debug_log = shader.getInfoLog();
     glslang::FinalizeProcess();
+    *stdout = fp_old;
 
     if (appstate.use_logfile && appstate.verbose) {
         fmt::print(appstate.logfile_stream, "Diagnostics raw output: {}\n" , debug_log);
@@ -155,6 +159,10 @@ json get_diagnostics(std::string uri, std::string content,
 std::optional<std::string> handle_message(const MessageBuffer& message_buffer, AppState& appstate)
 {
     json body = message_buffer.body();
+
+    if (body["method"] == "initialized") {
+        return std::nullopt;
+    }
 
     if (body["method"] == "initialize") {
         appstate.workspace.set_initialized(true);
