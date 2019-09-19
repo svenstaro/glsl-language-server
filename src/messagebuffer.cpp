@@ -1,5 +1,4 @@
 #include "messagebuffer.hpp"
-#include <iostream>
 
 MessageBuffer::MessageBuffer() {}
 MessageBuffer::~MessageBuffer() {}
@@ -60,7 +59,7 @@ void MessageBuffer::handle_string(std::string s)
         // we reach the length of the body as provided in the Content-Length
         // header.
         auto content_length = std::stoi(m_headers["Content-Length"]);
-        if (m_raw_message.length() >= content_length) {
+        if (m_raw_message.length() == content_length) {
             m_body = json::parse(m_raw_message);
         }
     }

@@ -59,7 +59,7 @@ EShLanguage find_language(const std::string& name)
         return EShLangFragment;
     else if (ext == ".comp")
         return EShLangCompute;
-	throw std::invalid_argument("Unknown file extension!");
+    throw std::invalid_argument("Unknown file extension!");
 }
 
 json get_diagnostics(std::string uri, std::string content,
