@@ -17,7 +17,7 @@ include_directories(
 
 add_subdirectory(externals/json EXCLUDE_FROM_ALL)
 include_directories(
-    externals/json/src
+    externals/json/include
 )
 
 add_library(mongoose externals/mongoose/mongoose.c)
