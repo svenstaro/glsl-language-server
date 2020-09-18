@@ -20,17 +20,14 @@ Currently this LSP implementation can be interfaced with using either HTTP or st
 ## Compile
 
     git submodule update --init
-    mkdir build
-    cd build
-    cmake ..
-    make
+    cmake -Bbuild
+    make -Cbuild
 
 You can also use the `Makefile` in the project root which is provided for convenience.
 
 ## Install
 
-    cd build
-    make install
+    make -Cbuild install
 
 ## Usage
 
