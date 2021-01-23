@@ -1,0 +1,17 @@
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Building with ${{ matrix.compiler }}
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        compiler: [clang, gcc]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: make
+      run: |
+        make
