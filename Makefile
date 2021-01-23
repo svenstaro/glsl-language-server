@@ -1,6 +1,6 @@
 .PHONY: build
 build:
-	mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && make -j$(shell nproc)
+	cmake -GNinja -Bbuild . && ninja -Cbuild
 
 .PHONY: run
 run: build
