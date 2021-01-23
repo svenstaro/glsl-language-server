@@ -20,14 +20,14 @@ Currently this LSP implementation can be interfaced with using either HTTP or st
 ## Compile
 
     git submodule update --init
-    cmake -Bbuild
-    make -Cbuild
+    cmake -Bbuild -GNinja
+    ninja -Cbuild
 
 You can also use the `Makefile` in the project root which is provided for convenience.
 
 ## Install
 
-    make -Cbuild install
+    ninja -Cbuild install
 
 ## Usage
 
