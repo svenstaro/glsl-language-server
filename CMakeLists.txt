@@ -45,6 +45,7 @@ target_link_libraries(glslls
     nlohmann_json
     mongoose
     stdc++fs
+    SPIRV
     fmt::fmt-header-only
 )
 
