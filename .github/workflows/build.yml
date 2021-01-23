@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    name: Building with ${{ matrix.compiler }}
+    name: Build (${{ matrix.compiler }})
     runs-on: ubuntu-20.04
     strategy:
       matrix:
