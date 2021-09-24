@@ -39,12 +39,19 @@ add_executable(glslls
     ${SOURCES}
     externals/glslang/StandAlone/ResourceLimits.cpp
 )
+
+if (CMAKE_SYSTEM_NAME MATCHES Darwin)
+    set(stdfs)
+else()
+    set(stdfs stdc++fs)
+endif()
+
 target_link_libraries(glslls
     ${CMAKE_THREAD_LIBS_INIT}
     glslang
     nlohmann_json
     mongoose
-    stdc++fs
+    ${stdfs}
     SPIRV
     fmt::fmt-header-only
 )
