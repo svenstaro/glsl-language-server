@@ -6,6 +6,10 @@ build:
 run: build
 	build/glslls
 
+.PHONY: install
+install: build
+	ninja -Cbuild install
+
 .PHONY: clean
 clean:
 	rm -rf build
