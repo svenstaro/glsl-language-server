@@ -47,15 +47,15 @@ std::string make_response(const json& response)
 EShLanguage find_language(const std::string& name)
 {
     auto ext = fs::path(name).extension();
-    if (ext == ".vert")
+    if (ext == ".vert" || ext == ".vs")
         return EShLangVertex;
     else if (ext == ".tesc")
         return EShLangTessControl;
     else if (ext == ".tese")
         return EShLangTessEvaluation;
-    else if (ext == ".geom")
+    else if (ext == ".geom" || ext == ".gs")
         return EShLangGeometry;
-    else if (ext == ".frag")
+    else if (ext == ".frag" || ext == ".fs")
         return EShLangFragment;
     else if (ext == ".comp")
         return EShLangCompute;
