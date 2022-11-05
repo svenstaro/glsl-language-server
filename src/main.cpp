@@ -73,7 +73,7 @@ json get_diagnostics(std::string uri, std::string content,
     glslang::InitializeProcess();
     glslang::TShader shader(lang);
     shader.setStrings(&shader_cstring, 1);
-    TBuiltInResource Resources = glslang::DefaultTBuiltInResource;
+    TBuiltInResource Resources = *GetDefaultResources();
     EShMessages messages = EShMsgCascadingErrors;
     shader.parse(&Resources, 110, false, messages);
     std::string debug_log = shader.getInfoLog();
