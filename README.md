@@ -38,15 +38,8 @@ You can run `glslls` to use a HTTP server to handle IO. Alternatively, run
 The following are examples of how to run `glslls` from various editors that support LSP.
 
 ### Emacs
-Add the following to your `init.el`, or other config file.
-This assumes you have [glsl-mode](https://github.com/jimhourihan/glsl-mode) installed.
-See the [lsp-mode docs](https://emacs-lsp.github.io/lsp-mode/page/adding-new-language/) for more details.
-```elisp
-(with-eval-after-load 'lsp-mode
-  (add-to-list 'lsp-language-id-configuration
-               '(glsl-mode . "glsl"))
-  (lsp-register-client
-   (make-lsp-client :new-connection (lsp-stdio-connection '("glslls" "--stdin"))
-                    :activation-fn (lsp-activate-on "glsl")
-                    :server-id 'glslls)))
-```
+
+[lsp-mode](https://github.com/emacs-lsp/lsp-mode/) has this language server
+integrated into the core. This assumes you have [glsl-mode](https://github.com/jimhourihan/glsl-mode)
+installed. See the lsp-mode's [GLSL](https://emacs-lsp.github.io/lsp-mode/page/lsp-glsl/)
+for more details.
