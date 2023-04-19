@@ -278,6 +278,15 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
 
     // If we don't know the method requested, we end up here.
     if (body.count("method") == 1) {
+        // Requests have an ID field, but notifications do not.
+        bool is_notification = body.find("id") == body.end();
+        if (is_notification) {
+            // We don't have to respond to notifications. So don't error on
+            // notifications we don't recognize.
+            // https://microsoft.github.io/language-server-protocol/specifications/specification-3-15/#notificationMessage
+            return std::nullopt;
+        }
+
         json error{
             { "code", -32601 },
             { "message", fmt::format("Method '{}' not supported.", body["method"].get<std::string>()) },
