@@ -12,7 +12,7 @@
 #include "Initialize.h"
 
 #include <cstdint>
-#include <experimental/filesystem>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <regex>
@@ -24,9 +24,10 @@
 #include "workspace.hpp"
 #include "utils.hpp"
 #include "symbols.hpp"
+#include "includer.hpp"
 
 using json = nlohmann::json;
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 
 struct AppState {
     Workspace workspace;
@@ -73,13 +74,19 @@ json get_diagnostics(std::string uri, std::string content,
     FILE fp_old = *stdout;
     *stdout = *fopen("/dev/null","w");
     auto document = uri;
-    auto shader_cstring = content.c_str();
     auto lang = find_language(document);
+
     glslang::TShader shader(lang);
-    shader.setStrings(&shader_cstring, 1);
+
+    auto shader_cstring = content.c_str();
+    auto shader_name = document.c_str();
+    shader.setStringsWithLengthsAndNames(&shader_cstring, nullptr, &shader_name, 1);
+
+    FileIncluder includer{&appstate.workspace};
+
     TBuiltInResource Resources = *GetDefaultResources();
     EShMessages messages = EShMsgCascadingErrors;
-    shader.parse(&Resources, 110, false, messages);
+    shader.parse(&Resources, 110, false, messages, includer);
     std::string debug_log = shader.getInfoLog();
     *stdout = fp_old;
 
@@ -87,7 +94,7 @@ json get_diagnostics(std::string uri, std::string content,
         fmt::print(appstate.logfile_stream, "Diagnostics raw output: {}\n" , debug_log);
     }
 
-    std::regex re("(.*): 0:(\\d*): (.*)");
+    std::regex re("([A-Z]*): (.*):(\\d*): (.*)");
     std::smatch matches;
     auto error_lines = split_string(debug_log, "\n");
     auto content_lines = split_string(content, "\n");
@@ -95,7 +102,10 @@ json get_diagnostics(std::string uri, std::string content,
     json diagnostics;
     for (auto error_line : error_lines) {
         std::regex_search(error_line, matches, re);
-        if (matches.size() == 4) {
+        if (matches.size() == 5) {
+            std::string file = matches[2];
+            if (file != document) continue; // message is for another file
+
             json diagnostic;
             std::string severity = matches[1];
             int severity_no = -1;
@@ -109,10 +119,11 @@ json get_diagnostics(std::string uri, std::string content,
                     fmt::print(appstate.logfile_stream, "Error: Unknown severity '{}'\n", severity);
                 }
             }
-            std::string message = trim(matches[3], " ");
+
+            std::string message = trim(matches[4], " ");
 
             // -1 because lines are 0-indexed as per LSP specification.
-            int line_no = std::stoi(matches[2]) - 1;
+            int line_no = std::stoi(matches[3]) - 1;
             std::string source_line = content_lines[line_no];
 
             int start_char = -1;
@@ -481,12 +492,14 @@ int main(int argc, char* argv[])
     uint16_t port = 61313;
     std::string logfile;
     std::string symbols_path;
+    std::string diagnostic_path;
 
     auto stdin_option = app.add_flag("--stdin", use_stdin, "Don't launch an HTTP server and instead accept input on stdin");
     app.add_flag("-v,--verbose", verbose, "Enable verbose logging");
     app.add_option("-l,--log", logfile, "Log file");
     app.add_option("-p,--port", port, "Port", true)->excludes(stdin_option);
     app.add_option("--debug-symbols", symbols_path, "Print the builtin symbols");
+    app.add_option("--debug-diagnostic", diagnostic_path, "Debug diagnostic output for the given file");
 
     try {
         app.parse(argc, argv);
@@ -509,6 +522,12 @@ int main(int argc, char* argv[])
         for (auto& entry : symbols) {
             fmt::print("{} : {} : {}\n", entry.first, entry.second.kind, entry.second.details);
         }
+    } else if (!diagnostic_path.empty()) {
+        std::string contents = *read_file_to_string(diagnostic_path.c_str());
+        std::string uri = make_path_uri(diagnostic_path);
+        appstate.workspace.add_document(uri, contents);
+        auto diagnostics = get_diagnostics(uri, contents, appstate);
+        fmt::print("diagnostics: {}\n", diagnostics.dump(4));
     } else if (!use_stdin) {
         struct mg_mgr mgr;
         struct mg_connection* nc;
