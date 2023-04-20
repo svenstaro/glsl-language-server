@@ -113,9 +113,12 @@ bool is_whitespace(char c) {
     return c == ' ' || c == '\t' || c == '\n';
 }
 
-/// Extracts all symbols from the given string, and inserts them into the symbol map.
+/// Extracts all global symbols from the given string, and inserts them into the symbol map.
+/// This will not register symbols within function bodies, as they are context dependent.
 ///
-/// The current implementation is very naive and may not handle certain cases that well.
+/// The current implementation uses naive heuristics and thus may not handle
+/// certain cases that well, and also give wrong results. This should be
+/// replaced with an actual parser, but is workable for now.
 void extract_symbols(const char* text, SymbolMap& symbols) {
     std::vector<Word> words;
     int arguments = 0;
