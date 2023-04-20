@@ -120,6 +120,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
     std::vector<Word> words;
     int arguments = 0;
     bool had_arguments = false;
+    Word array{};
     Word inside_block{};
 
     const char* p = text;
@@ -127,10 +128,13 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
         if (is_identifier_start_char(*p)) {
             const char* start = p;
             while (is_identifier_char(*p)) p++;
-            if (*p == '[') {
-                while (*p && *p != ']') p++;
-            }
             Word ident{start, p};
+
+            if (*p == '[') {
+                const char* array_start = p;
+                while (*p && *p != ']') p++;
+                array = Word{array_start, *p == ']' ? p+1 : p};
+            }
 
             // don't confuse `layout(...)` for a function.
             if (ident.is_equal("layout")) {
@@ -226,13 +230,16 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
                     symbols.emplace(type, Symbol{Symbol::Type, "<type>"});
                 }
 
+                if (arguments == 0 && array.start) {
+                    type.append(array.start, array.end);
+                }
+
                 for (int i = 0; i < arguments; i++) {
                     if (i == 0) {
                         type += " (";
                     } else {
                         type += ", ";
                     }
-
 
                     Word arg = words[name_index + 1 + i];
                     const char* t = arg.start;
@@ -259,6 +266,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
             words.clear();
             arguments = 0;
             had_arguments = false;
+            array = Word{};
         }
 
         p++;
