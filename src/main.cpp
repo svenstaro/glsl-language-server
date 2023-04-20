@@ -34,6 +34,8 @@ struct AppState {
     std::ofstream logfile_stream;
 };
 
+std::ofstream* tmp_log;
+
 std::string make_response(const json& response)
 {
     json content = response;
@@ -202,6 +204,12 @@ int get_last_word_start(const char* text, int offset) {
     return start;
 }
 
+int get_word_end(const char* text, int start) {
+    int end = start;
+    while (text[end] && is_identifier_char(text[end])) end++;
+    return end;
+}
+
 struct Symbol {
     enum Kind {
         Unknown = 0,
@@ -311,6 +319,15 @@ void add_builtin_types(SymbolMap& symbols)  {
 struct Word {
     const char* start = nullptr;
     const char* end = nullptr;
+
+    bool is_equal(const char* text) const {
+        const char* s = start;
+        while (s != end && *s == *text) {
+            s++;
+            text++;
+        }
+        return s == end && *text == 0;
+    }
 };
 
 bool is_whitespace(char c) {
@@ -324,6 +341,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
     std::vector<Word> words;
     int arguments = 0;
     bool had_arguments = false;
+    Word inside_block{};
 
     const char* p = text;
     while (*p) {
@@ -333,7 +351,18 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
             if (*p == '[') {
                 while (*p && *p != ']') p++;
             }
-            words.push_back({start, p});
+            Word ident{start, p};
+
+            // don't confuse `layout(...)` for a function.
+            if (ident.is_equal("layout")) {
+                while (is_whitespace(*p)) p++;
+                if (*p == '(') {
+                    while (*p && *p != ')') p++;
+                }
+                continue;
+            }
+
+            words.push_back(ident);
             continue;
         } 
 
@@ -345,10 +374,30 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
         } 
 
         if (*p == '{') {
+            // TODO: handle function bodies
+
+            if (words.size() >= 2 && arguments == 0) {
+                Word kind = words[words.size() - 2];
+                if (kind.is_equal("in") 
+                        || kind.is_equal("out") 
+                        || kind.is_equal("uniform") 
+                        || kind.is_equal("buffer")) {
+                    inside_block = words[words.size() - 1];
+                    words.clear();
+                    p++;
+                    continue;
+                }
+            }
+
             // skip struct fields
             while (*p && *p != '}') p++;
             continue;
         } 
+
+        if (*p == '}' && inside_block.start) {
+            words.push_back(inside_block);
+            inside_block = Word{};
+        }
 
         if (*p == '(') {
             had_arguments = true;
@@ -505,6 +554,32 @@ json get_completions(const std::string &uri, int line, int character, AppState& 
     return matches;
 }
 
+json get_hover_info(const std::string& uri, int line, int character, AppState& appstate) {
+    const std::string& document = appstate.workspace.documents()[uri];
+    int offset = find_position_offset(document.c_str(), line, character);
+    int word_start = get_last_word_start(document.c_str(), offset);
+    int word_end = get_word_end(document.c_str(), word_start);
+    int length = word_end - word_start;
+
+    if (length <= 0) {
+        // no word under the cursor.
+        return nullptr;
+    }
+
+    std::string word = document.substr(word_start, length);
+
+    auto symbols = get_symbols(uri, appstate);
+    auto symbol = symbols.find(word);
+    if (symbol == symbols.end()) return nullptr;
+
+    return json {
+        { "contents", { 
+            { "language", "glsl" }, 
+            { "value", symbol->second.details } 
+        } }
+    };
+}
+
 std::optional<std::string> handle_message(const MessageBuffer& message_buffer, AppState& appstate)
 {
     json body = message_buffer.body();
@@ -549,7 +624,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
                 "capabilities",
                 {
                 { "textDocumentSync", text_document_sync },
-                { "hoverProvider", false },
+                { "hoverProvider", true },
                 { "completionProvider", completion_provider },
                 { "signatureHelpProvider", signature_help_provider },
                 { "definitionProvider", false },
@@ -620,6 +695,19 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
         json result_body{
             { "id", body["id"] },
             { "result", completions }
+        };
+        return make_response(result_body);
+    } else if (body["method"] == "textDocument/hover") {
+        auto uri = body["params"]["textDocument"]["uri"];
+        auto position = body["params"]["position"];
+        int line = position["line"];
+        int character = position["character"];
+
+        json hover = get_hover_info(uri, line, character, appstate);
+
+        json result_body{
+            { "id", body["id"] },
+            { "result", hover }
         };
         return make_response(result_body);
     }
@@ -739,6 +827,7 @@ int main(int argc, char* argv[])
     appstate.use_logfile = !logfile.empty();
     if (appstate.use_logfile) {
         appstate.logfile_stream.open(logfile);
+        tmp_log = &appstate.logfile_stream;
     }
 
     glslang::InitializeProcess();
@@ -748,9 +837,7 @@ int main(int argc, char* argv[])
         for (auto& entry : symbols) {
             fmt::print("{} : {} : {}\n", entry.first, entry.second.kind, entry.second.details);
         }
-    } else
-
-    if (!use_stdin) {
+    } else if (!use_stdin) {
         struct mg_mgr mgr;
         struct mg_connection* nc;
         struct mg_bind_opts bind_opts;
