@@ -85,7 +85,7 @@ json get_diagnostics(std::string uri, std::string content,
     FileIncluder includer{&appstate.workspace};
 
     TBuiltInResource Resources = *GetDefaultResources();
-    EShMessages messages = EShMsgCascadingErrors;
+    EShMessages messages = (EShMessages)(EShMsgCascadingErrors | EShMsgVulkanRules);
     shader.parse(&Resources, 110, false, messages, includer);
     std::string debug_log = shader.getInfoLog();
     *stdout = fp_old;
