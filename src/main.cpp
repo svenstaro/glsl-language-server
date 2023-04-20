@@ -744,7 +744,8 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
             { "message", fmt::format("Method '{}' not supported.", body["method"].get<std::string>()) },
         };
         json result_body{
-            { "error", error }
+            { "id", body["id"] },
+            { "error", error },
         };
         return make_response(result_body);
     }
