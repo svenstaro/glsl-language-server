@@ -217,7 +217,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
             }
         } 
 
-        if (*p == ';' || *p == ')') {
+        if (*p == ';' || *p == ')' || *p == '=') {
             // end of declaration
             int name_index = (int)words.size() - arguments - 1;
             int type_index = name_index - 1;
@@ -270,6 +270,11 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
             arguments = 0;
             had_arguments = false;
             array = Word{};
+
+            if (*p == '=') {
+                // if we have a constant assignment, skip over the expression
+                while (*p && *p != ';') p++;
+            }
         }
 
         p++;
