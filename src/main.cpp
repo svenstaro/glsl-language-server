@@ -29,11 +29,22 @@
 using json = nlohmann::json;
 namespace fs = std::filesystem;
 
+/// By default we target the most recent graphics APIs to be maximally permissive.
+struct TargetVersions {
+    // The target API (eg, Vulkan, OpenGL).
+    glslang::EShClient client_api = glslang::EShClientVulkan;
+    glslang::EShTargetClientVersion client_api_version = glslang::EShTargetVulkan_1_3;
+
+    // The target SPIR-V version
+    glslang::EShTargetLanguageVersion spv_version = glslang::EShTargetSpv_1_6;
+};
+
 struct AppState {
     Workspace workspace;
     bool verbose;
     bool use_logfile;
     std::ofstream logfile_stream;
+    TargetVersions target;
 };
 
 std::ofstream* tmp_log;
@@ -78,6 +89,10 @@ json get_diagnostics(std::string uri, std::string content,
 
     glslang::TShader shader(lang);
 
+    auto target = appstate.target;
+    shader.setEnvClient(target.client_api, target.client_api_version);
+    shader.setEnvTarget(glslang::EShTargetSpv, target.spv_version);
+
     auto shader_cstring = content.c_str();
     auto shader_name = document.c_str();
     shader.setStringsWithLengthsAndNames(&shader_cstring, nullptr, &shader_name, 1);
@@ -85,7 +100,7 @@ json get_diagnostics(std::string uri, std::string content,
     FileIncluder includer{&appstate.workspace};
 
     TBuiltInResource Resources = *GetDefaultResources();
-    EShMessages messages = (EShMessages)(EShMsgCascadingErrors | EShMsgVulkanRules);
+    EShMessages messages = EShMsgCascadingErrors;
     shader.parse(&Resources, 110, false, messages, includer);
     std::string debug_log = shader.getInfoLog();
     *stdout = fp_old;
@@ -491,15 +506,26 @@ int main(int argc, char* argv[])
     bool verbose = false;
     uint16_t port = 61313;
     std::string logfile;
+
+    std::string client_api = "vulkan1.3";
+    std::string spirv_version = "spv1.6";
+
     std::string symbols_path;
     std::string diagnostic_path;
 
     auto stdin_option = app.add_flag("--stdin", use_stdin, "Don't launch an HTTP server and instead accept input on stdin");
     app.add_flag("-v,--verbose", verbose, "Enable verbose logging");
     app.add_option("-l,--log", logfile, "Log file");
-    app.add_option("-p,--port", port, "Port", true)->excludes(stdin_option);
-    app.add_option("--debug-symbols", symbols_path, "Print the builtin symbols");
+    app.add_option("--debug-symbols", symbols_path, "Print the list of symbols for the given file");
     app.add_option("--debug-diagnostic", diagnostic_path, "Debug diagnostic output for the given file");
+    app.add_option("-p,--port", port, "Port", true)->excludes(stdin_option);
+    app.add_option("--target-env", client_api,
+            "Target client environment.\n"
+            "    [vulkan vulkan1.0 vulkan1.1 vulkan1.2 vulkan1.3 opengl opengl4.5]", true);
+    app.add_option("--target-spv", spirv_version,
+            "The SPIR-V version to target.\n"
+            "Defaults to the highest possible for the target environment.\n"
+            "    [spv1.0 spv1.1 spv1.2 spv1.3 spv1.4 spv1.5 spv1.6]", true);
 
     try {
         app.parse(argc, argv);
@@ -513,6 +539,54 @@ int main(int argc, char* argv[])
     if (appstate.use_logfile) {
         appstate.logfile_stream.open(logfile);
         tmp_log = &appstate.logfile_stream;
+    }
+
+    if (!client_api.empty()) {
+        if (client_api == "vulkan1.3" || client_api == "vulkan") {
+            appstate.target.client_api = glslang::EShClientVulkan;
+            appstate.target.client_api_version = glslang::EShTargetVulkan_1_3;
+            appstate.target.spv_version = glslang::EShTargetSpv_1_6;
+        } else if (client_api == "vulkan1.2") {
+            appstate.target.client_api = glslang::EShClientVulkan;
+            appstate.target.client_api_version = glslang::EShTargetVulkan_1_2;
+            appstate.target.spv_version = glslang::EShTargetSpv_1_5;
+        } else if (client_api == "vulkan1.1") {
+            appstate.target.client_api = glslang::EShClientVulkan;
+            appstate.target.client_api_version = glslang::EShTargetVulkan_1_1;
+            appstate.target.spv_version = glslang::EShTargetSpv_1_3;
+        } else if (client_api == "vulkan1.0") {
+            appstate.target.client_api = glslang::EShClientVulkan;
+            appstate.target.client_api_version = glslang::EShTargetVulkan_1_0;
+            appstate.target.spv_version = glslang::EShTargetSpv_1_1;
+        } else if (client_api == "opengl4.5" || client_api == "opengl") {
+            appstate.target.client_api = glslang::EShClientOpenGL;
+            appstate.target.client_api_version = glslang::EShTargetOpenGL_450;
+            appstate.target.spv_version = glslang::EShTargetSpv_1_3;
+        } else {
+            fmt::print("unknown client api: {}\n", client_api);
+            return 1;
+        }
+    }
+
+    if (!spirv_version.empty()) {
+        if (spirv_version == "spv1.6") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_6;
+        } else if (spirv_version == "spv1.5") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_5;
+        } else if (spirv_version == "spv1.4") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_4;
+        } else if (spirv_version == "spv1.3") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_3;
+        } else if (spirv_version == "spv1.2") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_2;
+        } else if (spirv_version == "spv1.1") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_1;
+        } else if (spirv_version == "spv1.0") {
+            appstate.target.spv_version = glslang::EShTargetSpv_1_0;
+        } else {
+            fmt::print("unknown SPIR-V version: {}\n", spirv_version);
+            return 1;
+        }
     }
 
     glslang::InitializeProcess();
