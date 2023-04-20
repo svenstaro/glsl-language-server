@@ -54,6 +54,25 @@ int find_position_offset(const char* text, int line, int character) {
     return offset;
 }
 
+/// Given a byte offset into a file, returns the corresponding line and column.
+// FIXME: use UTF-16 offsets
+// https://fasterthanli.me/articles/the-bottom-emoji-breaks-rust-analyzer
+SourceFileLocation find_source_location(const char* text, int offset) {
+    SourceFileLocation location{ 0, 0 };
+    const char* p = text;
+    const char* end = text + offset;
+    while (*p && p < end) {
+        if (*p == '\n') {
+            location.line += 1;
+            location.character = 0;
+        } else {
+            location.character += 1;
+        }
+        p++;
+    }
+    return location;
+}
+
 /// Returns `true` if the character may start an identifier.
 bool is_identifier_start_char(char c) {
     return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
