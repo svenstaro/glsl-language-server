@@ -389,7 +389,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
                 }
             }
 
-            // skip struct fields
+            // skip struct fields and function bodies (their contents are not global)
             while (*p && *p != '}') p++;
             continue;
         } 
@@ -431,7 +431,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
             }
         } 
 
-        if (*p == ';') {
+        if (*p == ';' || *p == ')') {
             // end of declaration
             int name_index = (int)words.size() - arguments - 1;
             int type_index = name_index - 1;
@@ -473,7 +473,7 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
                     }
                 }
 
-                Symbol::Kind kind = had_arguments ? Symbol::Function : Symbol::Constant;
+                Symbol::Kind kind = *p == ')' ? Symbol::Function : Symbol::Constant;
                 symbols.emplace(name, Symbol{kind, type});
             }
 
@@ -505,6 +505,7 @@ SymbolMap get_symbols(const std::string& uri, AppState& appstate){
     builtins.initialize(version, profile, spv_version);
     builtins.initialize(resources, version, profile, spv_version, language);
 
+    // TODO: cache builtin symbols between runs.
     SymbolMap symbols;
     extract_symbols(builtins.getCommonString().c_str(), symbols);
     extract_symbols(builtins.getStageString(language).c_str(), symbols);
