@@ -192,8 +192,10 @@ SymbolMap get_symbols(const std::string& uri, AppState& appstate){
     int version = 460;
     // same thing here: use compatibility profile for more symbols
     EProfile profile = ECompatibilityProfile;
-    // we don't care about SPIR-V generation
+
     glslang::SpvVersion spv_version{};
+    spv_version.spv = appstate.target.spv_version;
+    spv_version.vulkanRelaxed = true; // be maximally permissive, allowing certain OpenGL in Vulkan
 
     glslang::TPoolAllocator pool{};
     glslang::SetThreadPoolAllocator(&pool);
