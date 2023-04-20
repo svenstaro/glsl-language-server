@@ -179,7 +179,7 @@ json get_diagnostics(std::string uri, std::string content,
         }
     }
     if (appstate.use_logfile && appstate.verbose && !diagnostics.empty()) {
-        fmt::print(appstate.logfile_stream, "Sending diagnostics: {}\n" , diagnostics);
+        fmt::print(appstate.logfile_stream, "Sending diagnostics: {}\n" , diagnostics.dump(4));
     }
     appstate.logfile_stream.flush();
     return diagnostics;
