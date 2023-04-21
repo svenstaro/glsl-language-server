@@ -43,3 +43,11 @@ The following are examples of how to run `glslls` from various editors that supp
 integrated into the core. This assumes you have [glsl-mode](https://github.com/jimhourihan/glsl-mode)
 installed. See the lsp-mode's [GLSL](https://emacs-lsp.github.io/lsp-mode/page/lsp-glsl/)
 for more details.
+
+### Neovim
+
+[lspconfig](https://github.com/neovim/nvim-lspconfig) offers a ready-to-go configuration:
+
+```lua
+require'lspconfig'.glslls.setup{}
+```
