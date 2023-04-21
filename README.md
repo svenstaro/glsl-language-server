@@ -7,12 +7,12 @@ Currently this LSP implementation can be interfaced with using either HTTP or st
 ### Current Features
 
 - Diagnostics
-
-### Planned Features
-
 - Completion
 - Hover
 - Jump to def
+
+### Planned Features
+
 - Workspace symbols
 - Find references
 

@@ -12,8 +12,18 @@ std::string trim_left(const std::string& s, const std::string& delimiters);
 
 std::string trim(const std::string& s, const std::string& delimiters);
 
+struct SourceFileLocation {
+    /// Zero indexed line index
+    int line;
+    /// Zero indexed character index from the start of the line
+    int character;
+};
+
 /// Returns the byte offset for the given character on the given line.
 int find_position_offset(const char* text, int line, int character);
+
+/// Given a byte offset into a file, returns the corresponding line and column.
+SourceFileLocation find_source_location(const char* text, int offset);
 
 /// Returns `true` if the character may start an identifier.
 bool is_identifier_start_char(char c);

@@ -207,11 +207,11 @@ SymbolMap get_symbols(const std::string& uri, AppState& appstate){
 
     // TODO: cache builtin symbols between runs.
     SymbolMap symbols;
+    add_builtin_types(symbols);
     extract_symbols(builtins.getCommonString().c_str(), symbols);
     extract_symbols(builtins.getStageString(language).c_str(), symbols);
-    extract_symbols(appstate.workspace.documents()[uri].c_str(), symbols);
 
-    add_builtin_types(symbols);
+    extract_symbols(appstate.workspace.documents()[uri].c_str(), symbols, uri.c_str());
 
     glslang::GetThreadPoolAllocator().pop();
     glslang::SetThreadPoolAllocator(nullptr);
@@ -252,7 +252,11 @@ json get_completions(const std::string &uri, int line, int character, AppState& 
     return matches;
 }
 
-json get_hover_info(const std::string& uri, int line, int character, AppState& appstate) {
+std::optional<std::string> get_word_under_cursor(
+        const std::string& uri, 
+        int line, int character, 
+        AppState& appstate) 
+{
     const std::string& document = appstate.workspace.documents()[uri];
     int offset = find_position_offset(document.c_str(), line, character);
     int word_start = get_last_word_start(document.c_str(), offset);
@@ -261,13 +265,18 @@ json get_hover_info(const std::string& uri, int line, int character, AppState& a
 
     if (length <= 0) {
         // no word under the cursor.
-        return nullptr;
+        return std::nullopt;
     }
 
-    std::string word = document.substr(word_start, length);
+    return document.substr(word_start, length);
+}
+
+json get_hover_info(const std::string& uri, int line, int character, AppState& appstate) {
+    auto word = get_word_under_cursor(uri, line, character, appstate);
+    if (!word) return nullptr;
 
     auto symbols = get_symbols(uri, appstate);
-    auto symbol = symbols.find(word);
+    auto symbol = symbols.find(*word);
     if (symbol == symbols.end()) return nullptr;
 
     return json {
@@ -275,6 +284,34 @@ json get_hover_info(const std::string& uri, int line, int character, AppState& a
             { "language", "glsl" }, 
             { "value", symbol->second.details } 
         } }
+    };
+}
+
+json get_definition(const std::string& uri, int line, int character, AppState& appstate) {
+    auto word = get_word_under_cursor(uri, line, character, appstate);
+    if (!word) return nullptr;
+
+    auto symbols = get_symbols(uri, appstate);
+    auto symbol_iter = symbols.find(*word);
+    if (symbol_iter == symbols.end()) return nullptr;
+    auto symbol = symbol_iter->second;
+    if (symbol.location.uri == nullptr) return nullptr;
+
+    const std::string& text = appstate.workspace.documents()[symbol.location.uri];
+    auto position = find_source_location(text.c_str(), symbol.location.offset);
+    int length = word->size();
+
+    json start {
+        { "line", position.line },
+        { "character", position.character },
+    };
+    json end {
+        { "line", position.line },
+        { "character", position.character + length },
+    };
+    return json {
+        { "uri", symbol.location.uri },
+        { "range", { { "start", start }, { "end", end } } },
     };
 }
 
@@ -325,7 +362,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
                 { "hoverProvider", true },
                 { "completionProvider", completion_provider },
                 { "signatureHelpProvider", signature_help_provider },
-                { "definitionProvider", false },
+                { "definitionProvider", true },
                 { "referencesProvider", false },
                 { "documentHighlightProvider", false },
                 { "documentSymbolProvider", false },
@@ -406,6 +443,19 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
         json result_body{
             { "id", body["id"] },
             { "result", hover }
+        };
+        return make_response(result_body);
+    } else if (body["method"] == "textDocument/definition") {
+        auto uri = body["params"]["textDocument"]["uri"];
+        auto position = body["params"]["position"];
+        int line = position["line"];
+        int character = position["character"];
+
+        json result = get_definition(uri, line, character, appstate);
+
+        json result_body{
+            { "id", body["id"] },
+            { "result", result }
         };
         return make_response(result_body);
     }
@@ -592,9 +642,21 @@ int main(int argc, char* argv[])
     glslang::InitializeProcess();
 
     if (!symbols_path.empty()) {
-        auto symbols = get_symbols(symbols_path, appstate);
+        std::string contents = *read_file_to_string(symbols_path.c_str());
+        std::string uri = make_path_uri(symbols_path);
+        appstate.workspace.add_document(uri, contents);
+        auto symbols = get_symbols(uri, appstate);
         for (auto& entry : symbols) {
-            fmt::print("{} : {} : {}\n", entry.first, entry.second.kind, entry.second.details);
+            const auto& name = entry.first;
+            const auto& symbol = entry.second;
+
+            if (symbol.location.uri) {
+                const auto& contents = appstate.workspace.documents()[symbol.location.uri];
+                auto position = find_source_location(contents.c_str(), symbol.location.offset);
+                fmt::print("{} : {}:{} : {}\n", name, position.line, position.character, symbol.details);
+            } else {
+                fmt::print("{} : @{} : {}\n", name, symbol.location.offset, symbol.details);
+            }
         }
     } else if (!diagnostic_path.empty()) {
         std::string contents = *read_file_to_string(diagnostic_path.c_str());

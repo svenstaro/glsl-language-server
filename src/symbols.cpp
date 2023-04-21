@@ -119,7 +119,7 @@ bool is_whitespace(char c) {
 /// The current implementation uses naive heuristics and thus may not handle
 /// certain cases that well, and also give wrong results. This should be
 /// replaced with an actual parser, but is workable for now.
-void extract_symbols(const char* text, SymbolMap& symbols) {
+void extract_symbols(const char* text, SymbolMap& symbols, const char* uri) {
     std::vector<Word> words;
     int arguments = 0;
     bool had_arguments = false;
@@ -230,7 +230,9 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
                 std::string type(type_word.start, type_word.end);
 
                 if (!type.empty()) {
-                    symbols.emplace(type, Symbol{Symbol::Type, "<type>"});
+                    if (symbols.find(type) == symbols.end()) {
+                        symbols.emplace(type, Symbol{Symbol::Type, "<type>"});
+                    }
                 }
 
                 if (arguments == 0 && array.start) {
@@ -263,7 +265,8 @@ void extract_symbols(const char* text, SymbolMap& symbols) {
                 }
 
                 Symbol::Kind kind = *p == ')' ? Symbol::Function : Symbol::Constant;
-                symbols.emplace(name, Symbol{kind, type});
+                int offset = name_word.start - text;
+                symbols.emplace(name, Symbol{kind, type, {uri, offset}});
             }
 
             words.clear();
