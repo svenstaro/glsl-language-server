@@ -1,6 +1,10 @@
 #include "utils.hpp"
 
 #include <regex>
+#include <cstdio>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 std::vector<std::string> split_string(const std::string& string_to_split, const std::string& pattern)
 {
@@ -81,4 +85,35 @@ int get_word_end(const char* text, int start) {
     int end = start;
     while (text[end] && is_identifier_char(text[end])) end++;
     return end;
+}
+
+std::optional<std::string> read_file_to_string(const char* path) {
+    FILE* f = fopen(path, "r");
+    if (!f) return std::nullopt;
+
+    fseek(f, 0, SEEK_END);
+    size_t size = ftell(f);
+
+    std::string contents;
+    contents.resize(size);
+
+    rewind(f);
+    size_t actual = fread(&contents[0], sizeof(char), size, f);
+    contents.resize(actual);
+
+    return contents;
+}
+
+
+std::string make_path_uri(const std::string& path) {
+    return "file://" + std::string(fs::absolute(path));
+}
+
+const char* strip_prefix(const char* prefix, const char* haystack) {
+    while (*prefix) {
+        if (*prefix != *haystack) return nullptr;
+        prefix++;
+        haystack++;
+    }
+    return haystack;
 }
