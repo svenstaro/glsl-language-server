@@ -36,8 +36,6 @@ struct AppState {
     std::ofstream logfile_stream;
 };
 
-std::ofstream* tmp_log;
-
 std::string make_response(const json& response)
 {
     json content = response;
@@ -85,7 +83,8 @@ json get_diagnostics(std::string uri, std::string content,
     FileIncluder includer{&appstate.workspace};
 
     TBuiltInResource Resources = *GetDefaultResources();
-    EShMessages messages = EShMsgCascadingErrors;
+    EShMessages messages =
+      (EShMessages)(EShMsgCascadingErrors | EShMsgVulkanRules);
     shader.parse(&Resources, 110, false, messages, includer);
     std::string debug_log = shader.getInfoLog();
     *stdout = fp_old;
@@ -512,7 +511,6 @@ int main(int argc, char* argv[])
     appstate.use_logfile = !logfile.empty();
     if (appstate.use_logfile) {
         appstate.logfile_stream.open(logfile);
-        tmp_log = &appstate.logfile_stream;
     }
 
     glslang::InitializeProcess();
