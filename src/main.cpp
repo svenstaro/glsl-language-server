@@ -9,6 +9,7 @@
 
 #include "ResourceLimits.h"
 #include "ShaderLang.h"
+#include "Initialize.h"
 
 #include <cstdint>
 #include <experimental/filesystem>
@@ -17,10 +18,12 @@
 #include <regex>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "messagebuffer.hpp"
 #include "workspace.hpp"
 #include "utils.hpp"
+#include "symbols.hpp"
 
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
@@ -70,7 +73,6 @@ json get_diagnostics(std::string uri, std::string content,
     auto document = uri;
     auto shader_cstring = content.c_str();
     auto lang = find_language(document);
-    glslang::InitializeProcess();
     glslang::TShader shader(lang);
     shader.setStrings(&shader_cstring, 1);
     TBuiltInResource Resources = *GetDefaultResources();
@@ -78,7 +80,6 @@ json get_diagnostics(std::string uri, std::string content,
       (EShMessages)(EShMsgCascadingErrors | EShMsgVulkanRules);
     shader.parse(&Resources, 110, false, messages);
     std::string debug_log = shader.getInfoLog();
-    glslang::FinalizeProcess();
     *stdout = fp_old;
 
     if (appstate.use_logfile && appstate.verbose) {
@@ -157,6 +158,98 @@ json get_diagnostics(std::string uri, std::string content,
     return diagnostics;
 }
 
+SymbolMap get_symbols(const std::string& uri, AppState& appstate){
+    auto language = find_language(uri);
+
+    // use the highest known version so that we get as many symbols as possible
+    int version = 460;
+    // same thing here: use compatibility profile for more symbols
+    EProfile profile = ECompatibilityProfile;
+    // we don't care about SPIR-V generation
+    glslang::SpvVersion spv_version{};
+
+    glslang::TPoolAllocator pool{};
+    glslang::SetThreadPoolAllocator(&pool);
+    pool.push();
+
+    const TBuiltInResource& resources = *GetDefaultResources();
+    glslang::TBuiltIns builtins{};
+    builtins.initialize(version, profile, spv_version);
+    builtins.initialize(resources, version, profile, spv_version, language);
+
+    // TODO: cache builtin symbols between runs.
+    SymbolMap symbols;
+    extract_symbols(builtins.getCommonString().c_str(), symbols);
+    extract_symbols(builtins.getStageString(language).c_str(), symbols);
+    extract_symbols(appstate.workspace.documents()[uri].c_str(), symbols);
+
+    add_builtin_types(symbols);
+
+    glslang::GetThreadPoolAllocator().pop();
+    glslang::SetThreadPoolAllocator(nullptr);
+
+    return symbols;
+}
+
+void find_completions(const SymbolMap& symbols, const std::string& prefix, std::vector<json>& out) {
+    for (auto& entry : symbols) {
+        auto& name = entry.first;
+        auto& symbol = entry.second;
+        out.push_back(json {
+            { "label", name },
+            { "kind", symbol.kind == Symbol::Unknown ? json(nullptr) : json(symbol.kind) },
+            { "detail", symbol.details },
+        });
+    }
+}
+
+json get_completions(const std::string &uri, int line, int character, AppState& appstate)
+{
+    const std::string& document = appstate.workspace.documents()[uri];
+    int offset = find_position_offset(document.c_str(), line, character);
+    int word_start = get_last_word_start(document.c_str(), offset);
+    int length = offset - word_start;
+
+    if (length <= 0) {
+        // no word under the cursor.
+        return nullptr;
+    }
+
+    auto name = document.substr(word_start, length);
+
+    std::vector<json> matches;
+    auto symbols = get_symbols(uri, appstate);
+    find_completions(symbols, name, matches);
+
+    return matches;
+}
+
+json get_hover_info(const std::string& uri, int line, int character, AppState& appstate) {
+    const std::string& document = appstate.workspace.documents()[uri];
+    int offset = find_position_offset(document.c_str(), line, character);
+    int word_start = get_last_word_start(document.c_str(), offset);
+    int word_end = get_word_end(document.c_str(), word_start);
+    int length = word_end - word_start;
+
+    if (length <= 0) {
+        // no word under the cursor.
+        return nullptr;
+    }
+
+    std::string word = document.substr(word_start, length);
+
+    auto symbols = get_symbols(uri, appstate);
+    auto symbol = symbols.find(word);
+    if (symbol == symbols.end()) return nullptr;
+
+    return json {
+        { "contents", { 
+            { "language", "glsl" }, 
+            { "value", symbol->second.details } 
+        } }
+    };
+}
+
 std::optional<std::string> handle_message(const MessageBuffer& message_buffer, AppState& appstate)
 {
     json body = message_buffer.body();
@@ -201,7 +294,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
                 "capabilities",
                 {
                 { "textDocumentSync", text_document_sync },
-                { "hoverProvider", false },
+                { "hoverProvider", true },
                 { "completionProvider", completion_provider },
                 { "signatureHelpProvider", signature_help_provider },
                 { "definitionProvider", false },
@@ -261,7 +354,34 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
                         } }
         };
         return make_response(result_body);
+    } else if (body["method"] == "textDocument/completion") {
+        auto uri = body["params"]["textDocument"]["uri"];
+        auto position = body["params"]["position"];
+        int line = position["line"];
+        int character = position["character"];
+
+        json completions = get_completions(uri, line, character, appstate);
+
+        json result_body{
+            { "id", body["id"] },
+            { "result", completions }
+        };
+        return make_response(result_body);
+    } else if (body["method"] == "textDocument/hover") {
+        auto uri = body["params"]["textDocument"]["uri"];
+        auto position = body["params"]["position"];
+        int line = position["line"];
+        int character = position["character"];
+
+        json hover = get_hover_info(uri, line, character, appstate);
+
+        json result_body{
+            { "id", body["id"] },
+            { "result", hover }
+        };
+        return make_response(result_body);
     }
+
 
     // If the workspace has not yet been initialized but the client sends a
     // message that doesn't have method "initialize" then we'll return an error
@@ -293,7 +413,8 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
             { "message", fmt::format("Method '{}' not supported.", body["method"].get<std::string>()) },
         };
         json result_body{
-            { "error", error }
+            { "id", body["id"] },
+            { "error", error },
         };
         return make_response(result_body);
     }
@@ -358,10 +479,13 @@ int main(int argc, char* argv[])
     bool verbose = false;
     uint16_t port = 61313;
     std::string logfile;
+    std::string symbols_path;
+
     auto stdin_option = app.add_flag("--stdin", use_stdin, "Don't launch an HTTP server and instead accept input on stdin");
     app.add_flag("-v,--verbose", verbose, "Enable verbose logging");
     app.add_option("-l,--log", logfile, "Log file");
     app.add_option("-p,--port", port, "Port", true)->excludes(stdin_option);
+    app.add_option("--debug-symbols", symbols_path, "Print the builtin symbols");
 
     try {
         app.parse(argc, argv);
@@ -376,7 +500,14 @@ int main(int argc, char* argv[])
         appstate.logfile_stream.open(logfile);
     }
 
-    if (!use_stdin) {
+    glslang::InitializeProcess();
+
+    if (!symbols_path.empty()) {
+        auto symbols = get_symbols(symbols_path, appstate);
+        for (auto& entry : symbols) {
+            fmt::print("{} : {} : {}\n", entry.first, entry.second.kind, entry.second.details);
+        }
+    } else if (!use_stdin) {
         struct mg_mgr mgr;
         struct mg_connection* nc;
         struct mg_bind_opts bind_opts;
@@ -436,6 +567,8 @@ int main(int argc, char* argv[])
     if (appstate.use_logfile) {
         appstate.logfile_stream.close();
     }
+
+    glslang::FinalizeProcess();
 
     return 0;
 }

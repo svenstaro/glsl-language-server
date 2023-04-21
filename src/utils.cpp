@@ -30,3 +30,55 @@ std::string trim(const std::string& s, const std::string& delimiters = " \f\n\r\
 {
     return trim_left(trim_right(s, delimiters), delimiters);
 }
+
+/// Returns the byte offset for the given character on the given line.
+// FIXME: use UTF-16 offsets
+// https://fasterthanli.me/articles/the-bottom-emoji-breaks-rust-analyzer
+int find_position_offset(const char* text, int line, int character) {
+    int offset = 0;
+    while (line > 0) {
+        while (text[offset] && text[offset] != '\n') offset += 1;
+        offset += text[offset] == '\n';
+        line -= 1;
+    }
+
+    while (character > 0 && text[offset] && text[offset] != '\n') {
+        offset += 1;
+        character -= 1;
+    }
+
+    return offset;
+}
+
+/// Returns `true` if the character may start an identifier.
+bool is_identifier_start_char(char c) {
+    return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_';
+}
+
+/// Returns `true` if the character may be part of an identifier.
+bool is_identifier_char(char c) {
+    return is_identifier_start_char(c) || ('0' <= c && c <= '9');
+}
+
+/// Returns the offset in `text` where the last word started.
+int get_last_word_start(const char* text, int offset) {
+    int start = offset;
+    while (start > 0 && is_identifier_char(text[start - 1])) {
+        start -= 1;
+    }
+
+    // If `text` was `123abc` and `offset` pointed at `b`, start would point at `1`.
+    // We want to point to `a`, so advance past any characters that are not a
+    // valid start of an identifier.
+    while (start < offset && !is_identifier_start_char(text[start])) {
+        start += 1;
+    }
+
+    return start;
+}
+
+int get_word_end(const char* text, int start) {
+    int end = start;
+    while (text[end] && is_identifier_char(text[end])) end++;
+    return end;
+}

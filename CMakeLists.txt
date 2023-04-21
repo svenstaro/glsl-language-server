@@ -7,6 +7,7 @@ add_subdirectory(externals/glslang EXCLUDE_FROM_ALL)
 include_directories(
     externals/glslang/
     externals/glslang/glslang/Public
+    externals/glslang/glslang/MachineIndependent
     externals/glslang/StandAlone
 )
 
