@@ -338,23 +338,23 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
 
         json completion_provider{
             { "resolveProvider", false },
-            { "triggerCharacters", {} },
+            { "triggerCharacters", json::array() },
         };
         json signature_help_provider{
-            { "triggerCharacters", "" }
+            { "triggerCharacters", json::array() }
         };
         json code_lens_provider{
             { "resolveProvider", false }
         };
         json document_on_type_formatting_provider{
             { "firstTriggerCharacter", "" },
-            { "moreTriggerCharacter", "" },
+            { "moreTriggerCharacter", json::array() },
         };
         json document_link_provider{
             { "resolveProvider", false }
         };
         json execute_command_provider{
-            { "commands", {} }
+            { "commands", json::array() }
         };
         json result{
             {
