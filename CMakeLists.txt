@@ -41,7 +41,7 @@ add_executable(glslls
     externals/glslang/StandAlone/ResourceLimits.cpp
 )
 
-if (CMAKE_SYSTEM_NAME MATCHES Darwin)
+if (CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES FreeBSD)
     set(stdfs)
 else()
     set(stdfs stdc++fs)
