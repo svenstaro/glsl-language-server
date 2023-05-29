@@ -59,22 +59,29 @@ std::string make_response(const json& response)
     return header + content.dump(4);
 }
 
+static bool ends_with(const std::string haystack, const std::string needle) {
+    if (needle.length() > haystack.length())
+        return false;
+    return haystack.compare(haystack.length() - needle.length(), needle.length(), needle) == 0;
+}
+
 EShLanguage find_language(const std::string& name)
 {
-    auto ext = fs::path(name).extension();
+    auto path = fs::path(name);
+    auto ext = path.extension();
     if (ext == ".glsl")
-        ext = fs::path(name).replace_extension().extension(); //replaces current extension with nothing and finds new file extension
-    if (ext == ".vert" || ext == ".vs")
+        ext = path.replace_extension(); //replaces current extension with nothing and finds new file extension
+    if (ends_with(ext, "vert") || ends_with(ext, "vs"))
         return EShLangVertex;
-    else if (ext == ".tesc")
+    else if (ends_with(ext, "tesc"))
         return EShLangTessControl;
-    else if (ext == ".tese")
+    else if (ends_with(ext, "tese"))
         return EShLangTessEvaluation;
-    else if (ext == ".geom" || ext == ".gs")
+	 else if (ends_with(ext, "geom") || ends_with(ext, "gs"))
         return EShLangGeometry;
-    else if (ext == ".frag" || ext == ".fs")
+	 else if (ends_with(ext, "frag") || ends_with(ext, "fs"))
         return EShLangFragment;
-    else if (ext == ".comp")
+    else if (ends_with(ext, "comp"))
         return EShLangCompute;
     throw std::invalid_argument("Unknown file extension!");
 }
