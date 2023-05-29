@@ -71,15 +71,15 @@ EShLanguage find_language(const std::string& name)
     auto ext = path.extension();
     if (ext == ".glsl")
         ext = path.replace_extension(); //replaces current extension with nothing and finds new file extension
-    if (ends_with(ext, "vert") || ends_with(ext, "vs"))
+    if (ends_with(ext, "vert") || ends_with(ext, "vs") || ends_with(ext, "vsh"))
         return EShLangVertex;
     else if (ends_with(ext, "tesc"))
         return EShLangTessControl;
     else if (ends_with(ext, "tese"))
         return EShLangTessEvaluation;
-	 else if (ends_with(ext, "geom") || ends_with(ext, "gs"))
+	 else if (ends_with(ext, "geom") || ends_with(ext, "gs") || ends_with(ext, "gsh"))
         return EShLangGeometry;
-	 else if (ends_with(ext, "frag") || ends_with(ext, "fs"))
+	 else if (ends_with(ext, "frag") || ends_with(ext, "fs") || ends_with(ext, "fsh"))
         return EShLangFragment;
     else if (ends_with(ext, "comp"))
         return EShLangCompute;
