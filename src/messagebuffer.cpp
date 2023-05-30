@@ -27,7 +27,7 @@ void MessageBuffer::handle_char(char c)
         // Now that we know that we're in the body, we just have to count until
         // we reach the length of the body as provided in the Content-Length
         // header.
-        auto content_length = std::stoi(m_headers["Content-Length"]);
+        auto content_length = std::stoul(m_headers["Content-Length"]);
         if (m_raw_message.length() == content_length) {
             m_body = json::parse(m_raw_message);
         }
@@ -58,7 +58,7 @@ void MessageBuffer::handle_string(std::string s)
         // Now that we know that we're in the body, we just have to count until
         // we reach the length of the body as provided in the Content-Length
         // header.
-        auto content_length = std::stoi(m_headers["Content-Length"]);
+        auto content_length = std::stoul(m_headers["Content-Length"]);
         if (m_raw_message.length() == content_length) {
             m_body = json::parse(m_raw_message);
         }

@@ -122,7 +122,6 @@ bool is_whitespace(char c) {
 void extract_symbols(const char* text, SymbolMap& symbols, const char* uri) {
     std::vector<Word> words;
     int arguments = 0;
-    bool had_arguments = false;
     Word array{};
     Word inside_block{};
 
@@ -186,10 +185,8 @@ void extract_symbols(const char* text, SymbolMap& symbols, const char* uri) {
         }
 
         if (*p == '(') {
-            had_arguments = true;
             p++;
             const char* start = nullptr;
-            const char* end = nullptr;
             while (*p) {
                 if (is_whitespace(*p)) {
                     p++;
@@ -206,12 +203,10 @@ void extract_symbols(const char* text, SymbolMap& symbols, const char* uri) {
 
                     p++;
                     start = nullptr;
-                    end = nullptr;
                     continue;
                 }
 
                 if (!start) start = p;
-                end = p;
 
                 p++;
             }
@@ -271,7 +266,6 @@ void extract_symbols(const char* text, SymbolMap& symbols, const char* uri) {
 
             words.clear();
             arguments = 0;
-            had_arguments = false;
             array = Word{};
 
             if (*p == '=') {
