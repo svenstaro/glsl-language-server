@@ -59,32 +59,26 @@ std::string make_response(const json& response)
     return header + content.dump(4);
 }
 
-static bool ends_with(const std::string haystack, const std::string needle) {
-    if (needle.length() > haystack.length())
-        return false;
-    return haystack.compare(haystack.length() - needle.length(), needle.length(), needle) == 0;
-}
-
 EShLanguage find_language(const std::string& name)
 {
     // As well as the one used in glslang, there are a number of different conventions used for naming GLSL shaders.
     // This function attempts to support the most common ones, by checking if the filename ends with one of a list of known extensions.
     // If a ".glsl" extension is found initially, it is first removed to allow for e.g. vs.glsl/vert.glsl naming.
     auto path = fs::path(name);
-    auto ext = path.extension();
+    auto ext = std::string(path.extension());
     if (ext == ".glsl")
-        ext = path.replace_extension(); //replaces current extension with nothing and finds new file extension
-    if (ends_with(ext, "vert") || ends_with(ext, "vs") || ends_with(ext, "vsh"))
+        ext = path.replace_extension();
+    if (ext.ends_with("vert") || ext.ends_with("vs") || ext.ends_with("vsh"))
         return EShLangVertex;
-    else if (ends_with(ext, "tesc"))
+    else if (ext.ends_with("tesc"))
         return EShLangTessControl;
-    else if (ends_with(ext, "tese"))
+    else if (ext.ends_with("tese"))
         return EShLangTessEvaluation;
-	 else if (ends_with(ext, "geom") || ends_with(ext, "gs") || ends_with(ext, "gsh"))
+	 else if (ext.ends_with("geom") || ext.ends_with("gs") || ext.ends_with("gsh"))
         return EShLangGeometry;
-	 else if (ends_with(ext, "frag") || ends_with(ext, "fs") || ends_with(ext, "fsh"))
+	 else if (ext.ends_with("frag") || ext.ends_with("fs") || ext.ends_with("fsh"))
         return EShLangFragment;
-    else if (ends_with(ext, "comp"))
+    else if (ext.ends_with("comp"))
         return EShLangCompute;
     throw std::invalid_argument("Unknown file extension!");
 }
