@@ -67,6 +67,9 @@ static bool ends_with(const std::string haystack, const std::string needle) {
 
 EShLanguage find_language(const std::string& name)
 {
+    // As well as the one used in glslang, there are a number of different conventions used for naming GLSL shaders.
+    // This function attempts to support the most common ones, by checking if the filename ends with one of a list of known extensions.
+    // If a ".glsl" extension is found initially, it is first removed to allow for e.g. vs.glsl/vert.glsl naming.
     auto path = fs::path(name);
     auto ext = path.extension();
     if (ext == ".glsl")
