@@ -185,7 +185,6 @@ void extract_symbols(const char* text, SymbolMap& symbols, const char* uri) {
         }
 
         if (*p == '(') {
-            had_arguments = true;
             p++;
             const char* start = nullptr;
             while (*p) {
