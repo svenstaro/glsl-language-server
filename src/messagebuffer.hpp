@@ -1,7 +1,7 @@
 #ifndef MESSAGEBUFFER_H
 #define MESSAGEBUFFER_H
 
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <string>
 #include <tuple>
