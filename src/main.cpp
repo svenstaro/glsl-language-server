@@ -571,14 +571,14 @@ int main(int argc, char* argv[])
     app.add_option("-l,--log", logfile, "Log file");
     app.add_option("--debug-symbols", symbols_path, "Print the list of symbols for the given file");
     app.add_option("--debug-diagnostic", diagnostic_path, "Debug diagnostic output for the given file");
-    app.add_option("-p,--port", port, "Port", true)->excludes(stdin_option);
+    app.add_option("-p,--port", port, "Port")->excludes(stdin_option);
     app.add_option("--target-env", client_api,
             "Target client environment.\n"
-            "    [vulkan vulkan1.0 vulkan1.1 vulkan1.2 vulkan1.3 opengl opengl4.5]", true);
+            "    [vulkan vulkan1.0 vulkan1.1 vulkan1.2 vulkan1.3 opengl opengl4.5]");
     app.add_option("--target-spv", spirv_version,
             "The SPIR-V version to target.\n"
             "Defaults to the highest possible for the target environment.\n"
-            "    [spv1.0 spv1.1 spv1.2 spv1.3 spv1.4 spv1.5 spv1.6]", true);
+            "    [spv1.0 spv1.1 spv1.2 spv1.3 spv1.4 spv1.5 spv1.6]");
 
     try {
         app.parse(argc, argv);
