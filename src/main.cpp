@@ -7,9 +7,9 @@
 
 #include <mongoose.h>
 
-#include <ResourceLimits.h>
-#include <ShaderLang.h>
-#include <Initialize.h>
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/Public/ShaderLang.h>
+#include <glslang/MachineIndependent/Initialize.h>
 
 #include <cstdint>
 #include <filesystem>

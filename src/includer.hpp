@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ShaderLang.h>
+#include <glslang/Public/ShaderLang.h>
 #include "workspace.hpp"
 
 class FileIncluder : public glslang::TShader::Includer {
