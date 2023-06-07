@@ -61,20 +61,24 @@ std::string make_response(const json& response)
 
 EShLanguage find_language(const std::string& name)
 {
-    auto ext = fs::path(name).extension();
+    // As well as the one used in glslang, there are a number of different conventions used for naming GLSL shaders.
+    // This function attempts to support the most common ones, by checking if the filename ends with one of a list of known extensions.
+    // If a ".glsl" extension is found initially, it is first removed to allow for e.g. vs.glsl/vert.glsl naming.
+    auto path = fs::path(name);
+    auto ext = std::string(path.extension());
     if (ext == ".glsl")
-        ext = fs::path(name).replace_extension().extension(); //replaces current extension with nothing and finds new file extension
-    if (ext == ".vert" || ext == ".vs")
+        ext = path.replace_extension();
+    if (ext.ends_with("vert") || ext.ends_with("vs") || ext.ends_with("vsh"))
         return EShLangVertex;
-    else if (ext == ".tesc")
+    else if (ext.ends_with("tesc"))
         return EShLangTessControl;
-    else if (ext == ".tese")
+    else if (ext.ends_with("tese"))
         return EShLangTessEvaluation;
-    else if (ext == ".geom" || ext == ".gs")
+	 else if (ext.ends_with("geom") || ext.ends_with("gs") || ext.ends_with("gsh"))
         return EShLangGeometry;
-    else if (ext == ".frag" || ext == ".fs")
+	 else if (ext.ends_with("frag") || ext.ends_with("fs") || ext.ends_with("fsh"))
         return EShLangFragment;
-    else if (ext == ".comp")
+    else if (ext.ends_with("comp"))
         return EShLangCompute;
     throw std::invalid_argument("Unknown file extension!");
 }
