@@ -5,7 +5,9 @@
 
 #include <nlohmann/json.hpp>
 
+#ifdef HAVE_HTTP_SUPPORT
 #include <mongoose.h>
+#endif
 
 #include <glslang/Public/ResourceLimits.h>
 #include <glslang/Public/ShaderLang.h>
@@ -510,6 +512,7 @@ std::optional<std::string> handle_message(const MessageBuffer& message_buffer, A
     return make_response(result_body);
 }
 
+#ifdef HAVE_HTTP_SUPPORT
 void ev_handler(struct mg_connection* c, int ev, void* p) {
     AppState& appstate = *static_cast<AppState*>(c->mgr->user_data);
 
@@ -550,6 +553,7 @@ void ev_handler(struct mg_connection* c, int ev, void* p) {
         }
     }
 }
+#endif
 
 int main(int argc, char* argv[])
 {
@@ -667,6 +671,7 @@ int main(int argc, char* argv[])
         auto diagnostics = get_diagnostics(uri, contents, appstate);
         fmt::print("diagnostics: {}\n", diagnostics.dump(4));
     } else if (!use_stdin) {
+#ifdef HAVE_HTTP_SUPPORT
         struct mg_mgr mgr;
         struct mg_connection* nc;
         struct mg_bind_opts bind_opts;
@@ -687,6 +692,10 @@ int main(int argc, char* argv[])
             mg_mgr_poll(&mgr, 1000);
         }
         mg_mgr_free(&mgr);
+#else
+        fmt::print("This version of glslls was built without support for HTTP communication\n");
+        return 1;
+#endif
     } else {
         char c;
         MessageBuffer message_buffer;
