@@ -577,12 +577,9 @@ const auto getVulkanSpv = []()
     return EShMessages(EShMsgSpvRules | EShMsgVulkanRules);
 };
 
-const auto getOpenGlSpv = []() 
+const auto getSpvRules = []() 
 {
-    EShMessages messages = EShMessages(0);
-    messages = EShMessages(messages | EShMsgSpvRules);
-    messages = EShMessages(messages & EShMsgVulkanRules);
-    return messages;
+    return EShMessages(EShMsgSpvRules);
 };
 
 int main(int argc, char* argv[])
@@ -595,7 +592,7 @@ int main(int argc, char* argv[])
     std::string logfile;
 
     std::string client_api = "vulkan1.3";
-    std::string spirv_version = "spv1.6";
+    std::string spirv_version;
 
     std::string symbols_path;
     std::string diagnostic_path;
@@ -652,7 +649,6 @@ int main(int argc, char* argv[])
             appstate.target.client_api = glslang::EShClientOpenGL;
             appstate.target.client_api_version = glslang::EShTargetOpenGL_450;
             appstate.target.spv_version = glslang::EShTargetSpv_1_3;
-            appstate.target.options = getOpenGlSpv();
         } else {
             fmt::print("unknown client api: {}\n", client_api);
             return 1;
@@ -660,6 +656,8 @@ int main(int argc, char* argv[])
     }
 
     if (!spirv_version.empty()) {
+        appstate.target.options = getSpvRules();
+
         if (spirv_version == "spv1.6") {
             appstate.target.spv_version = glslang::EShTargetSpv_1_6;
         } else if (spirv_version == "spv1.5") {
