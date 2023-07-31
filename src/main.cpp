@@ -37,6 +37,9 @@ struct TargetVersions {
 
     // The target SPIR-V version
     glslang::EShTargetLanguageVersion spv_version = glslang::EShTargetSpv_1_6;
+
+    // Options for glslValidator
+    EShMessages options = EShMessages(0);
 };
 
 struct AppState {
@@ -94,8 +97,22 @@ json get_diagnostics(std::string uri, std::string content,
     glslang::TShader shader(lang);
 
     auto target = appstate.target;
-    shader.setEnvClient(target.client_api, target.client_api_version);
-    shader.setEnvTarget(glslang::EShTargetSpv, target.spv_version);
+
+    if (target.options & EShMsgSpvRules) {
+        if (target.options & EShMsgVulkanRules) {
+            shader.setEnvInput((target.options & EShMsgReadHlsl) ? glslang::EShSourceHlsl
+                                                           : glslang::EShSourceGlsl,
+                                lang, glslang::EShClientVulkan, 100);
+            shader.setEnvClient(glslang::EShClientVulkan, target.client_api_version);
+            shader.setEnvTarget(glslang::EShTargetSpv, target.spv_version);
+        } else {
+            shader.setEnvInput((target.options & EShMsgReadHlsl) ? glslang::EShSourceHlsl
+                                                           : glslang::EShSourceGlsl,
+                                lang, glslang::EShClientOpenGL, 100);
+            shader.setEnvClient(glslang::EShClientOpenGL, target.client_api_version);
+            shader.setEnvTarget(glslang::EshTargetSpv, target.spv_version);
+        }
+    }
 
     auto shader_cstring = content.c_str();
     auto shader_name = document.c_str();
@@ -105,7 +122,7 @@ json get_diagnostics(std::string uri, std::string content,
 
     TBuiltInResource Resources = *GetDefaultResources();
     EShMessages messages =
-      (EShMessages)(EShMsgCascadingErrors | EShMsgVulkanRules);
+      (EShMessages)(EShMsgCascadingErrors | target.options);
     shader.parse(&Resources, 110, false, messages, includer);
     std::string debug_log = shader.getInfoLog();
     *stdout = fp_old;
@@ -555,6 +572,16 @@ void ev_handler(struct mg_connection* c, int ev, void* p) {
     }
 }
 
+const auto getVulkanSpv = []() 
+{
+    return EShMessages(EShMsgSpvRules | EShMsgVulkanRules);
+};
+
+const auto getSpvRules = []() 
+{
+    return EShMessages(EShMsgSpvRules);
+};
+
 int main(int argc, char* argv[])
 {
     CLI::App app{ "GLSL Language Server" };
@@ -565,7 +592,7 @@ int main(int argc, char* argv[])
     std::string logfile;
 
     std::string client_api = "vulkan1.3";
-    std::string spirv_version = "spv1.6";
+    std::string spirv_version;
 
     std::string symbols_path;
     std::string diagnostic_path;
@@ -602,18 +629,22 @@ int main(int argc, char* argv[])
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_3;
             appstate.target.spv_version = glslang::EShTargetSpv_1_6;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "vulkan1.2") {
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_2;
             appstate.target.spv_version = glslang::EShTargetSpv_1_5;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "vulkan1.1") {
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_1;
             appstate.target.spv_version = glslang::EShTargetSpv_1_3;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "vulkan1.0") {
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_0;
             appstate.target.spv_version = glslang::EShTargetSpv_1_1;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "opengl4.5" || client_api == "opengl") {
             appstate.target.client_api = glslang::EShClientOpenGL;
             appstate.target.client_api_version = glslang::EShTargetOpenGL_450;
@@ -625,6 +656,8 @@ int main(int argc, char* argv[])
     }
 
     if (!spirv_version.empty()) {
+        appstate.target.options = getSpvRules();
+
         if (spirv_version == "spv1.6") {
             appstate.target.spv_version = glslang::EShTargetSpv_1_6;
         } else if (spirv_version == "spv1.5") {
