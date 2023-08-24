@@ -38,7 +38,7 @@ file(GLOB SOURCES
 include_directories(src)
 add_executable(glslls
     ${SOURCES}
-    externals/glslang/StandAlone/ResourceLimits.cpp
+    externals/glslang/glslang/ResourceLimits/ResourceLimits.cpp
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES FreeBSD)
