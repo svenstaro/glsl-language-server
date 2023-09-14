@@ -58,21 +58,12 @@ add_executable(glslls
     ${SOURCES}
 )
 
-if (MSVC)
-    target_compile_options(glslls PRIVATE /W4)
-else()
-    target_compile_options(glslls PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
-if (CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES FreeBSD)
-    set(stdfs)
-else()
-    set(stdfs stdc++fs)
-endif()
-
 target_link_libraries(glslls
     ${CMAKE_THREAD_LIBS_INIT}
-    ${stdfs}
+    glslang
+    nlohmann_json
+    mongoose
+    SPIRV
     fmt::fmt-header-only
 )
 
