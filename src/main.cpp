@@ -712,7 +712,7 @@ int main(int argc, char* argv[])
 
         mg_mgr_init(&mgr, NULL);
         fmt::print("Starting web server on port {}\n", port);
-        nc = mg_bind_opt(&mgr, std::to_string(port).c_str(), ev_handler, bind_opts);
+        nc = mg_bind_opt(&mgr, fmt::format("localhost:{}", port).c_str(), ev_handler, bind_opts);
         if (nc == NULL) {
             return 1;
         }
