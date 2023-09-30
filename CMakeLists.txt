@@ -47,7 +47,7 @@ else()
 endif()
 
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 file(GLOB SOURCES
     src/*.cpp
@@ -86,7 +86,7 @@ if (USE_SYSTEM_LIBS)
         target_link_libraries(glslls ${mongoose})
     endif()
 else()
-    target_sources(glslls PRIVATE externals/glslang/StandAlone/ResourceLimits.cpp)
+    target_sources(glslls PRIVATE externals/glslang/glslang/ResourceLimits/ResourceLimits.cpp)
     target_link_libraries(glslls
         glslang
         nlohmann_json

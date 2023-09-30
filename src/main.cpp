@@ -39,6 +39,9 @@ struct TargetVersions {
 
     // The target SPIR-V version
     glslang::EShTargetLanguageVersion spv_version = glslang::EShTargetSpv_1_6;
+
+    // Options for glslValidator
+    EShMessages options = EShMessages(0);
 };
 
 struct AppState {
@@ -63,20 +66,24 @@ std::string make_response(const json& response)
 
 EShLanguage find_language(const std::string& name)
 {
-    auto ext = fs::path(name).extension();
+    // As well as the one used in glslang, there are a number of different conventions used for naming GLSL shaders.
+    // This function attempts to support the most common ones, by checking if the filename ends with one of a list of known extensions.
+    // If a ".glsl" extension is found initially, it is first removed to allow for e.g. vs.glsl/vert.glsl naming.
+    auto path = fs::path(name);
+    auto ext = std::string(path.extension());
     if (ext == ".glsl")
-        ext = fs::path(name).replace_extension().extension(); //replaces current extension with nothing and finds new file extension
-    if (ext == ".vert" || ext == ".vs")
+        ext = path.replace_extension();
+    if (ext.ends_with("vert") || ext.ends_with("vs") || ext.ends_with("vsh"))
         return EShLangVertex;
-    else if (ext == ".tesc")
+    else if (ext.ends_with("tesc"))
         return EShLangTessControl;
-    else if (ext == ".tese")
+    else if (ext.ends_with("tese"))
         return EShLangTessEvaluation;
-    else if (ext == ".geom" || ext == ".gs")
+	 else if (ext.ends_with("geom") || ext.ends_with("gs") || ext.ends_with("gsh"))
         return EShLangGeometry;
-    else if (ext == ".frag" || ext == ".fs")
+	 else if (ext.ends_with("frag") || ext.ends_with("fs") || ext.ends_with("fsh"))
         return EShLangFragment;
-    else if (ext == ".comp")
+    else if (ext.ends_with("comp"))
         return EShLangCompute;
     throw std::invalid_argument("Unknown file extension!");
 }
@@ -92,8 +99,22 @@ json get_diagnostics(std::string uri, std::string content,
     glslang::TShader shader(lang);
 
     auto target = appstate.target;
-    shader.setEnvClient(target.client_api, target.client_api_version);
-    shader.setEnvTarget(glslang::EShTargetSpv, target.spv_version);
+
+    if (target.options & EShMsgSpvRules) {
+        if (target.options & EShMsgVulkanRules) {
+            shader.setEnvInput((target.options & EShMsgReadHlsl) ? glslang::EShSourceHlsl
+                                                           : glslang::EShSourceGlsl,
+                                lang, glslang::EShClientVulkan, 100);
+            shader.setEnvClient(glslang::EShClientVulkan, target.client_api_version);
+            shader.setEnvTarget(glslang::EShTargetSpv, target.spv_version);
+        } else {
+            shader.setEnvInput((target.options & EShMsgReadHlsl) ? glslang::EShSourceHlsl
+                                                           : glslang::EShSourceGlsl,
+                                lang, glslang::EShClientOpenGL, 100);
+            shader.setEnvClient(glslang::EShClientOpenGL, target.client_api_version);
+            shader.setEnvTarget(glslang::EshTargetSpv, target.spv_version);
+        }
+    }
 
     auto shader_cstring = content.c_str();
     auto shader_name = document.c_str();
@@ -103,7 +124,7 @@ json get_diagnostics(std::string uri, std::string content,
 
     TBuiltInResource Resources = *GetDefaultResources();
     EShMessages messages =
-      (EShMessages)(EShMsgCascadingErrors | EShMsgVulkanRules);
+      (EShMessages)(EShMsgCascadingErrors | target.options);
     shader.parse(&Resources, 110, false, messages, includer);
     std::string debug_log = shader.getInfoLog();
     *stdout = fp_old;
@@ -555,6 +576,16 @@ void ev_handler(struct mg_connection* c, int ev, void* p) {
 }
 #endif
 
+const auto getVulkanSpv = []() 
+{
+    return EShMessages(EShMsgSpvRules | EShMsgVulkanRules);
+};
+
+const auto getSpvRules = []() 
+{
+    return EShMessages(EShMsgSpvRules);
+};
+
 int main(int argc, char* argv[])
 {
     CLI::App app{ "GLSL Language Server" };
@@ -565,7 +596,7 @@ int main(int argc, char* argv[])
     std::string logfile;
 
     std::string client_api = "vulkan1.3";
-    std::string spirv_version = "spv1.6";
+    std::string spirv_version;
 
     std::string symbols_path;
     std::string diagnostic_path;
@@ -602,18 +633,22 @@ int main(int argc, char* argv[])
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_3;
             appstate.target.spv_version = glslang::EShTargetSpv_1_6;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "vulkan1.2") {
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_2;
             appstate.target.spv_version = glslang::EShTargetSpv_1_5;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "vulkan1.1") {
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_1;
             appstate.target.spv_version = glslang::EShTargetSpv_1_3;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "vulkan1.0") {
             appstate.target.client_api = glslang::EShClientVulkan;
             appstate.target.client_api_version = glslang::EShTargetVulkan_1_0;
             appstate.target.spv_version = glslang::EShTargetSpv_1_1;
+            appstate.target.options = getVulkanSpv();
         } else if (client_api == "opengl4.5" || client_api == "opengl") {
             appstate.target.client_api = glslang::EShClientOpenGL;
             appstate.target.client_api_version = glslang::EShTargetOpenGL_450;
@@ -625,6 +660,8 @@ int main(int argc, char* argv[])
     }
 
     if (!spirv_version.empty()) {
+        appstate.target.options = getSpvRules();
+
         if (spirv_version == "spv1.6") {
             appstate.target.spv_version = glslang::EShTargetSpv_1_6;
         } else if (spirv_version == "spv1.5") {
@@ -680,7 +717,7 @@ int main(int argc, char* argv[])
 
         mg_mgr_init(&mgr, NULL);
         fmt::print("Starting web server on port {}\n", port);
-        nc = mg_bind_opt(&mgr, std::to_string(port).c_str(), ev_handler, bind_opts);
+        nc = mg_bind_opt(&mgr, fmt::format("localhost:{}", port).c_str(), ev_handler, bind_opts);
         if (nc == NULL) {
             return 1;
         }
