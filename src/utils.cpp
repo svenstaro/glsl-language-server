@@ -108,18 +108,16 @@ int get_word_end(const char* text, int start) {
 }
 
 std::optional<std::string> read_file_to_string(const char* path) {
-    std::ifstream input_stream {path, std::fstream::in | std::fstream::ate};
+    std::ifstream input_stream {path, std::fstream::in};
     if (!input_stream) return std::nullopt;
 
-    const std::size_t size = input_stream.tellg();
+    const std::size_t size = fs::file_size(path);
     std::string buffer(size, '\0');
 
-    input_stream.seekg(0);
     input_stream.read(buffer.data(), size);
 
     return buffer;
 }
-
 
 std::string make_path_uri(const std::string& path) {
     return "file://" + fs::absolute(path).string();
