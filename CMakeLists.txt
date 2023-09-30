@@ -4,6 +4,11 @@ project(glsl-language-server)
 find_package(Threads REQUIRED)
 
 option(USE_SYSTEM_LIBS "Use system libraries" OFF)
+option(HTTP_SUPPORT "Enable HTTP support" ON)
+
+if (HTTP_SUPPORT)
+    add_definitions(-DHAVE_HTTP_SUPPORT)
+endif()
 
 if (USE_SYSTEM_LIBS)
     find_package(glslang REQUIRED)
@@ -12,12 +17,14 @@ if (USE_SYSTEM_LIBS)
     find_package(fmt REQUIRED)
     message(STATUS "found package fmt, version: ${fmt_VERSION}")
 
-    find_library(mongoose mongoose)
+    if (HTTP_SUPPORT)
+        find_library(mongoose mongoose)
 
-    if (mongoose)
-        message(STATUS "found library mongoose located in: ${mongoose}")
-    else()
-        message(FATAL_ERROR "mongoose library not found")
+        if (mongoose)
+            message(STATUS "found library mongoose located in: ${mongoose}")
+        else()
+            message(FATAL_ERROR "mongoose library not found")
+        endif()
     endif()
 else()
     add_subdirectory(externals/glslang EXCLUDE_FROM_ALL)
@@ -73,8 +80,11 @@ if (USE_SYSTEM_LIBS)
     target_link_libraries(glslls
         glslang::glslang
         glslang::glslang-default-resource-limits
-        ${mongoose}
     )
+
+    if (HTTP_SUPPORT)
+        target_link_libraries(glslls ${mongoose})
+    endif()
 else()
     target_sources(glslls PRIVATE externals/glslang/glslang/ResourceLimits/ResourceLimits.cpp)
     target_link_libraries(glslls
