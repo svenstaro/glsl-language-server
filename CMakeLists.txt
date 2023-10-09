@@ -58,6 +58,12 @@ add_executable(glslls
     ${SOURCES}
 )
 
+if (MSVC)
+    target_compile_options(glslls PRIVATE /W4)
+else()
+    target_compile_options(glslls PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 target_link_libraries(glslls
     ${CMAKE_THREAD_LIBS_INIT}
     glslang
