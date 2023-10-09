@@ -1,6 +1,16 @@
 # glsl-language-server
 Language server implementation for GLSL
 
+# I'm searching for a new maintainer.
+If you'd like to maintain this, please create an issue. This is currently still maintained and I
+will accept PRs but I'd like for someone to give this more love.
+
+When I started this, there were no other language servers for GLSL but now there are some
+alternatives which you can check out:
+
+- [glsl-lsp](https://github.com/KubaP/glsl-lsp)
+- [glsl_analyzer](https://github.com/nolanderc/glsl_analyzer)
+
 ## Status
 Currently this LSP implementation can be interfaced with using either HTTP or stdio.
 
@@ -15,7 +25,6 @@ Currently this LSP implementation can be interfaced with using either HTTP or st
 
 - Workspace symbols
 - Find references
-
 
 ## Compile
 
