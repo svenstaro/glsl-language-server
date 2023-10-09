@@ -70,18 +70,21 @@ EShLanguage find_language(const std::string& name)
     // This function attempts to support the most common ones, by checking if the filename ends with one of a list of known extensions.
     // If a ".glsl" extension is found initially, it is first removed to allow for e.g. vs.glsl/vert.glsl naming.
     auto path = fs::path(name);
-    auto ext = std::string(path.extension());
-    if (ext == ".glsl")
-        ext = path.replace_extension();
+    auto ext_path = path.extension();
+    if (ext_path == ".glsl")
+        ext_path = path.replace_extension();
+
+    const auto ext = ext_path.string();
+
     if (ext.ends_with("vert") || ext.ends_with("vs") || ext.ends_with("vsh"))
         return EShLangVertex;
     else if (ext.ends_with("tesc"))
         return EShLangTessControl;
     else if (ext.ends_with("tese"))
         return EShLangTessEvaluation;
-	 else if (ext.ends_with("geom") || ext.ends_with("gs") || ext.ends_with("gsh"))
+    else if (ext.ends_with("geom") || ext.ends_with("gs") || ext.ends_with("gsh"))
         return EShLangGeometry;
-	 else if (ext.ends_with("frag") || ext.ends_with("fs") || ext.ends_with("fsh"))
+    else if (ext.ends_with("frag") || ext.ends_with("fs") || ext.ends_with("fsh"))
         return EShLangFragment;
     else if (ext.ends_with("comp"))
         return EShLangCompute;

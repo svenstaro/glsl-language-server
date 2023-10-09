@@ -3,6 +3,7 @@
 #include <regex>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 
 namespace fs = std::filesystem;
 
@@ -107,25 +108,19 @@ int get_word_end(const char* text, int start) {
 }
 
 std::optional<std::string> read_file_to_string(const char* path) {
-    FILE* f = fopen(path, "r");
-    if (!f) return std::nullopt;
+    std::ifstream input_stream {path, std::fstream::in};
+    if (!input_stream) return std::nullopt;
 
-    fseek(f, 0, SEEK_END);
-    size_t size = ftell(f);
+    const std::size_t size = fs::file_size(path);
+    std::string buffer(size, '\0');
 
-    std::string contents;
-    contents.resize(size);
+    input_stream.read(buffer.data(), size);
 
-    rewind(f);
-    size_t actual = fread(&contents[0], sizeof(char), size, f);
-    contents.resize(actual);
-
-    return contents;
+    return buffer;
 }
 
-
 std::string make_path_uri(const std::string& path) {
-    return "file://" + std::string(fs::absolute(path));
+    return "file://" + fs::absolute(path).string();
 }
 
 const char* strip_prefix(const char* prefix, const char* haystack) {
