@@ -17,6 +17,12 @@ if (USE_SYSTEM_LIBS)
     find_package(fmt REQUIRED)
     message(STATUS "found package fmt, version: ${fmt_VERSION}")
 
+    find_package(nlohmann_json REQUIRED)
+    message(STATUS "found package nlohmann_json, version: ${nlohmann_json_VERSION}")
+
+    find_package(CLI11 REQUIRED)
+    message(STATUS "found package CLI11, version: ${CLI11_VERSION}")
+
     if (HTTP_SUPPORT)
         find_library(mongoose mongoose)
 
@@ -36,14 +42,16 @@ else()
         externals/json/include
     )
 
-    add_library(mongoose externals/mongoose/mongoose.c)
-    include_directories(
-        externals/mongoose
-    )
-
     include_directories(
         externals/CLI11/include
     )
+
+    if (HTTP_SUPPORT)
+        add_library(mongoose externals/mongoose/mongoose.c)
+        include_directories(
+            externals/mongoose
+        )
+    endif()
 endif()
 
 
@@ -68,7 +76,6 @@ target_link_libraries(glslls
     ${CMAKE_THREAD_LIBS_INIT}
     glslang
     nlohmann_json
-    mongoose
     SPIRV
     fmt::fmt-header-only
 )
