@@ -166,7 +166,15 @@ json get_diagnostics(std::string uri, std::string content,
 
             // -1 because lines are 0-indexed as per LSP specification.
             int line_no = std::stoi(matches[3]) - 1;
-            std::string source_line = content_lines[line_no];
+            std::string source_line;
+            //file might end with '\n' then line_no can be out of range in some cases
+            if(line_no<content_lines.size()){
+                source_line = content_lines[line_no];
+            }
+            else{
+                source_line = "";
+            }
+    
 
             int start_char = -1;
             int end_char = -1;
