@@ -110,6 +110,8 @@ int get_word_end(const char* text, int start) {
 std::optional<std::string> read_file_to_string(const char* path) {
     std::ifstream input_stream {path, std::fstream::in};
     if (!input_stream) return std::nullopt;
+    if(!fs::is_regular_file(path)) return std::nullopt;
+    
 
     const std::size_t size = fs::file_size(path);
     std::string buffer(size, '\0');
